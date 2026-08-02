@@ -37,4 +37,4 @@ jobs:
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/antiagingdna:latest
             docker stop antiagingdna || true
             docker rm antiagingdna || true
-            docker run -d --name antiagingdna -p 8080:8080 --restart unless-stopped ${{ secrets.DOCKERHUB_USERNAME }}/antiagingdna:latest
+            docker run -d --name antiagingdna --network antiaging-net -p 8080:8080 --restart unless-stopped ${{ secrets.DOCKERHUB_USERNAME }}/antiagingdna:latest
