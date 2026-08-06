@@ -59,7 +59,7 @@ description: |
 | 테이블 (헤더 표기) | 데이터 행 수 | 비고 |
 |---|---|---|
 | 사용자(user) | 3 | id(PK, VARCHAR(64)), login_id(NN, VARCHAR(64)), password(NN, VARCHAR(255)) |
-| DNA 정보(dna_info) | 15 | id(PK, VARCHAR(64)) + 14개 컬럼, 전부 타입 기입 완료 (§5 매핑 기준 추정치 — 정확한 길이/enum 여부는 실제 요구사항으로 검증 필요) |
+| DNA 정보(dna_info) | 15 | id(PK, VARCHAR(64)) + 14개 컬럼, 전부 타입 기입 완료. `sleep_type`/`smoking_frequency`/`drink_frequency`/`life_rhythm`/`weekend_rhythm` 은 정수 enum 코드(`INT`, `@Enumerated(EnumType.ORDINAL)` 전제)로 확정 |
 | 일지(diary) | 6 | id(PK, VARCHAR(64)), author_id(FK, NN, VARCHAR(64)) + 4개 컬럼, 전부 타입 기입 완료 |
 
 ### 현재 관계 체크리스트
@@ -73,15 +73,15 @@ description: |
 공백 오타 수정(`weekly_exercise_frequency`), 두 관계 엣지 모두 `exitX/exitY/entryX/entryY` 명시
 완료 — 기존 waypoint 좌표와 정확히 맞도록 역산했다 (user 하단 0.5→dna_info 상단 0.5 직선,
 user 하단 0.7→diary 상단 0.5, waypoint (360,240)/(760,240) 그대로 유지). `dna_info.id` 제약
-칸도 PK 공유형 1:1 관례에 맞춰 `PK, FK` 로 보완.
+칸도 PK 공유형 1:1 관례에 맞춰 `PK, FK` 로 보완. 컬럼명 네이밍은 `is_smoker`/`is_shift_worker`/
+`is_drinker` 로 snake_case 통일(사용자 확인 완료). `sleep_type`/`smoking_frequency`/
+`drink_frequency`/`life_rhythm`/`weekend_rhythm` 은 카테고리 문자열(`VARCHAR(32)`) 대신 정수
+enum 코드(`INT`)로 확정(사용자 확인 완료) — 실제 엔티티에서는 Java enum + `@Enumerated` 로
+관리. `VARCHAR(n)` 길이값(login_id 64, password 255 등)도 그대로 확정.
 
 **남은 부채 (지금 임의로 고치지 말 것 — 사용자가 요청할 때 처리)**:
 
-- `isSmoker`/`isShiftWorker`/`isDrinker` 는 camelCase, 나머지 컬럼은 전부 snake_case — 새
-  컬럼 추가 시 어느 쪽을 따를지 팀 컨벤션 확인 필요(임의 통일 금지).
-- 이번에 채운 TYPE 값(특히 `VARCHAR(n)` 길이, "빈도"/"리듬" 계열을 `VARCHAR(32)` 카테고리로
-  볼지 아니면 enum 코드/정수 점수로 볼지)은 컬럼명 기반 추정이다 — 실제 엔티티를 구현하기
-  전에 제품 요구사항으로 검증할 것.
+- 없음. 새로 발견되는 항목은 이 자리에 추가할 것.
 
 ---
 
@@ -258,6 +258,7 @@ ERD 는 한 변에 여러 관계가 몰릴 수 있어 아래처럼 변수 분수
 | `String` (`@Column(length=n)`) | `VARCHAR(n)` |
 | `String` (`@Lob`/대용량 텍스트) | `TEXT` |
 | `Integer`/`int` | `INT` |
+| Java enum (`@Enumerated(EnumType.ORDINAL)`) | `INT` — 이 프로젝트는 카테고리성 컬럼(빈도/리듬 등)을 문자열 대신 정수 enum 코드로 저장한다(§0 확정 사항). `dna_info.sleep_type`/`smoking_frequency`/`drink_frequency`/`life_rhythm`/`weekend_rhythm` 이 실사용 예 |
 | `Long`/`long` (FK 등으로 필요할 경우) | `BIGINT` |
 | `Boolean`/`boolean` | `BOOLEAN` |
 | `java.time.LocalDate` | `DATE` |
@@ -323,9 +324,9 @@ JPA 관계 양쪽을 보고 결정한다. **`@***ToMany`/컬렉션 쪽이 N, 단
 | password | 비밀번호 | insulin_sensitivity | 당분 민감도 |
 | author_id | 작성자 아이디 | stress_sensitivity | 스트레스 민감도 |
 | total_score | 종합 점수 | weekly_exercise_frequency | 주평균 운동 수 |
-| sleep_type | 수면 유형 | isSmoker | 흡연 여부 |
-| smoking_frequency | 흡연 빈도 | isShiftWorker | 교대 근무 여부 |
-| isDrinker | 음주 여부 | drink_frequency | 음주 빈도 |
+| sleep_type | 수면 유형 | is_smoker | 흡연 여부 |
+| smoking_frequency | 흡연 빈도 | is_shift_worker | 교대 근무 여부 |
+| is_drinker | 음주 여부 | drink_frequency | 음주 빈도 |
 | life_rhythm | 생활 리듬 | weekend_rhythm | 주말 리듬 |
 | sleep_started_time | 취침 시간 | sleep_ended_time | 기상 시간 |
 | sleep_waiting_time | 취침까지 소요 시간 | sleep_satisfaction | 수면 만족도 |
