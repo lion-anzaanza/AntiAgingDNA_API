@@ -29,10 +29,10 @@ jobs:
     steps:
       - uses: appleboy/ssh-action@v1
         with:
-          host: 18.207.116.75
+          host: 54.210.141.169
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
-          port: 20022
+          port: 22
           script: |
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/antiagingdna:latest
             docker stop antiagingdna || true
