@@ -30,8 +30,12 @@ jobs:
             docker ps --filter name=antiagingdna --format '{{.Names}}  {{.Status}}  {{.Image}}'
 
             echo ""
-            echo "── Flyway 로그 ─────────────────────────────────"
-            docker logs antiagingdna 2>&1 | grep -iE "flyway|migrat" | tail -15
+            echo "── 컨테이너 로그 (전체 tail) ───────────────────"
+            docker logs --tail 120 antiagingdna 2>&1
+
+            echo ""
+            echo "── 에러/예외만 ─────────────────────────────────"
+            docker logs antiagingdna 2>&1 | grep -iE "error|exception|caused by|failed|flyway|migrat" | tail -30
 
             echo ""
             echo "── flyway_schema_history ───────────────────────"
