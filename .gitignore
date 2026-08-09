@@ -1,5 +1,14 @@
-# Project-specific
-docs/SSH_ONLY_FOR_LOCAL.txt
+# Project-specific — 서버 접속 정보/자격증명. 파일명이 바뀌어도 새지 않도록 넓게 잡는다.
+# (한때 docs/SSH_ONLY_FOR_LOCAL.txt 만 지정돼 있어서, 파일명이 DO_NOT_CUMMIT_SSH.md 로
+#  바뀐 뒤 무방비 상태였다.)
+docs/SSH_ONLY_FOR_LOCAL.*
+docs/DO_NOT_CUMMIT_SSH.*
+docs/DO_NOT_COMMIT_SSH.*
+*SSH_ONLY*
+*DO_NOT_CUMMIT*
+*DO_NOT_COMMIT*
+*.pem
+*.key
 
 # Gradle
 .gradle/
