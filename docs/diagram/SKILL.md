@@ -30,11 +30,11 @@ description: |
 > 실제 스택(Spring Boot/JPA/MySQL)과 실제 ERD 내용(사용자·DNA 정보·일지)에 맞게 재작성한 것.
 > 실제로 그려본 뒤 발견되는 예외·관용은 §13 에 계속 보강한다.
 
-> **작성 방식**: 현재 3테이블·2관계 규모라 손으로 Read→Edit 해도 충분히 안전하다. 다만
-> 규모가 커지면(예: 10개+ 테이블) 손으로 좌표/높이/앵커를 찍다가 실수가 급증하므로, 그 시점엔
-> tables/edges 배열 → 높이 자동 계산 → XML 직렬화 → 겹침/앵커/관통 자가검증까지 한 번에
-> 하는 생성 스크립트(예: `scripts/gen-erd.mjs`) 도입을 고려한다. **이 저장소엔 아직 그런
-> 스크립트가 없다** — 만들 경우 이 문서의 §2~§4 규칙을 그대로 인코딩할 것.
+> **작성 방식 (2026-08-10 변경)**: 5테이블·71행 규모가 되면서 **생성 스크립트
+> `scripts/gen-erd.mjs` 를 도입했다.** 이제 ERD.drawio 는 **생성물**이므로 직접 Edit 하지 말고
+> 스크립트의 `tables` / `edges` / `notes` 배열을 고친 뒤 `node scripts/gen-erd.mjs` 로 재생성한다.
+> 스크립트가 §11 표의 7가지 검사를 전부 자체 수행하고 **실패 시 파일을 쓰지 않는다**.
+> 손으로 Edit 하면 다음 재생성 때 덮어써진다.
 
 > **[[drawio-ia]] 와의 관계**: 좌표를 눈대중이 아닌 산식으로 계산하는 것, 충돌 검증
 > 4-부등식 패턴, 명시적 exit/entry, lane 분리라는 **기본 원리는 [[drawio-ia]] §1·§2·§4
@@ -54,34 +54,116 @@ description: |
 2. 없으면: 아래 체크리스트를 최신 요구사항(사용자 요청, 기획 문서)과 대조한다. **이 표를
    갱신하지 않은 채 ERD 만 고치는 것 금지** — "ERD 에 있으니 맞겠지" 는 항상 금지.
 
-### 현재 테이블 체크리스트 (ERD 실측 기준)
+### Phase 표기 (2026-08-10 도입)
 
-| 테이블 (헤더 표기) | 데이터 행 수 | 비고 |
-|---|---|---|
-| 사용자(user) | 3 | id(PK, VARCHAR(64)), login_id(NN, VARCHAR(64)), password(NN, VARCHAR(255)) |
-| DNA 정보(dna_info) | 15 | id(PK, VARCHAR(64)) + 14개 컬럼, 전부 타입 기입 완료. `sleep_type`/`smoking_frequency`/`drink_frequency`/`life_rhythm`/`weekend_rhythm` 은 정수 enum 코드(`INT`, `@Enumerated(EnumType.ORDINAL)` 전제)로 확정 |
-| 일지(diary) | 6 | id(PK, VARCHAR(64)), author_id(FK, NN, VARCHAR(64)) + 4개 컬럼, 전부 타입 기입 완료 |
+ERD 는 **기획 3부작 전체**를 그리되, 1차 구현 범위를 음영으로 구분한다.
+
+- **Phase 1** (음영 없음) = 기획 ∩ 목업. 1차 구현 확정.
+- **Phase 2** (옅은 음영) = 기획에는 확정돼 있으나 목업(`docs/ui`)에 미반영. 스키마에는 그리되
+  1차 구현 보류. 전부 **nullable 컬럼 / 독립 테이블**이라 확정 시 `ALTER TABLE ADD COLUMN`
+  또는 `CREATE TABLE` 만으로 흡수되고 기존 테이블 재구성이 필요 없다.
+- 스크립트에서는 행 배열 5번째 원소 `true`(행 단위) 또는 테이블의 `phase2: true`(테이블 전체).
+
+### 현재 테이블 체크리스트 (ERD 실측 기준 · 2026-08-10)
+
+| 테이블 (헤더 표기) | 데이터 행 수 | Phase 2 행 | 비고 |
+|---|---|---|---|
+| 사용자(user) | 7 | 0 | id(PK) + email(UQ, NN) + password/nickname/birth_year + created_at/updated_at. **`login_id` 폐기** — 목업 STEP 2 가 이메일 단일 식별자다 |
+| 약관 동의(user_agreement) | 5 | 0 | 목업 `03_TERMS` 의 항목 4개를 행으로. 약관이 늘어도 컬럼 추가가 없고 **항목별 동의 시각**이 남는다 |
+| DNA 정보(dna_info) | 23 | 6 | id(PK, FK) + 온보딩 12문항 **원본 답변만** + completed_at/updated_at. Phase 2 = 사회 교류(Q11) · WHO-5 5문항(Q12) |
+| 일지(diary) | 24 | 5 | id(PK), author_id(FK, NN), log_date(NN) + 채점 11열 + 참고 3열 + created_at/updated_at. Phase 2 = 카페인 2열 · 기분 회복활동 · 사람 만남 · 걸은 시간 |
+| 일별 점수(daily_score) | 12 | 1 | 5영역 점수 + daily_total/display_total + scoring_version + created_at. Phase 2 = environment_score |
+
+합계 **71컬럼**. 이 수치는 `V1__init.sql` 과 엔티티 매핑 양쪽에서 검증된다(§11).
+
+카테고리 컬럼은 전부 **`VARCHAR(32)` + `@Enumerated(EnumType.STRING)`** 이다 (§5).
+서열 척도(`condition_level`, `sleep_satisfaction`, `stress_level`, `meal_count`, `who5_q1~q5`)만 `INT`.
 
 ### 현재 관계 체크리스트
 
 | 부모 | 자식 | 카디널리티 | 비고 |
 |---|---|---|---|
+| user | user_agreement | 1 : 0..N | user_agreement.user_id (FK, NN) · `UNIQUE(user_id, agreement_type)` |
 | user | dna_info | 1 : 1 | dna_info.id 가 user.id 와 PK 를 공유(별도 FK 컬럼 없음). 제약 칸은 `PK, FK` 로 표기(§6) |
-| user | diary | 1 : 0..N | diary.author_id (FK, NN) |
+| user | diary | 1 : 0..N | diary.author_id (FK, NN) · `UNIQUE(author_id, log_date)` |
+| user | daily_score | 1 : 0..N | daily_score.user_id (FK, NN) · `UNIQUE(user_id, score_date)` |
 
-**해결된 부채 (2026-08-07)**: TYPE 플레이스홀더 전부 채움(§5 기준), `weekly_exercise_ frequency`
-공백 오타 수정(`weekly_exercise_frequency`), 두 관계 엣지 모두 `exitX/exitY/entryX/entryY` 명시
-완료 — 기존 waypoint 좌표와 정확히 맞도록 역산했다 (user 하단 0.5→dna_info 상단 0.5 직선,
-user 하단 0.7→diary 상단 0.5, waypoint (360,240)/(760,240) 그대로 유지). `dna_info.id` 제약
-칸도 PK 공유형 1:1 관례에 맞춰 `PK, FK` 로 보완. 컬럼명 네이밍은 `is_smoker`/`is_shift_worker`/
-`is_drinker` 로 snake_case 통일(사용자 확인 완료). `sleep_type`/`smoking_frequency`/
-`drink_frequency`/`life_rhythm`/`weekend_rhythm` 은 카테고리 문자열(`VARCHAR(32)`) 대신 정수
-enum 코드(`INT`)로 확정(사용자 확인 완료) — 실제 엔티티에서는 Java enum + `@Enumerated` 로
-관리. `VARCHAR(n)` 길이값(login_id 64, password 255 등)도 그대로 확정.
+> `user` 는 자식이 4개인 허브다(§4.4). `user_agreement` 는 같은 밴드에 있어 **오른쪽 변**으로
+> 내보내고 나머지 3개를 아래 변에 0.2/0.4/0.6 으로 분산했다. TABLE_W=400 이라 이 분수들이
+> 전부 10배수 좌표로 떨어진다 — 분수를 바꾸면 스크립트의 격자 검증에 걸린다.
+
+> 복합 UNIQUE 는 제약 칸(폭 50)에 3개 토큰이 안 들어가므로 테이블 아래 **메모 텍스트**로 표기한다.
+> 메모도 스크립트의 `notes` 배열에서 생성된다.
+
+**해결된 부채 (2026-08-10)**: 기획 3부작(초기 진단 / 오늘의 일지 / 종합점수 산출 수식)에 맞춰
+전면 재설계. `total_score` 를 dna_info 에서 제거하고 `daily_score` 테이블로 분리(원본 답변과
+버전 태그된 파생 점수의 분리). `is_smoker`+`smoking_frequency` → `smoking_status`(KNHANES 4분류)
+단일 컬럼, `is_drinker`+`drink_frequency` → `drink_frequency`(AUDIT-C 5단계) 단일 컬럼으로 중복
+제거. `insulin_sensitivity` → `sugar_sensitivity`, `caffein_sensitivity` → `caffeine_sensitivity`
+오타 수정. `weekly_exercise_frequency`(빈도) → `exercise_level`(WHO 분/주 4구간). `sleep_quality`
+단일 INT → PSQI 체크 4개 BOOLEAN (산식 `100 − 25 × 체크수` 를 그대로 계산 가능). `weekend_rhythm`
+삭제(기획 개정으로 소멸). `diary.log_date` 신설 + 1인 1일 1건 UNIQUE. enum 저장을 ORDINAL(INT)
+에서 STRING(VARCHAR)로 전환(사용자 확인 완료 — 기획 선택지가 계속 개정되므로 서수 고정이 위험).
+
+**2026-08-10 (2차, 전체 ERD)**: 교집합 축소판에서 **기획 3부작 전체**로 확장하고 Phase 표기를
+도입. 신규 테이블 2개 — `scoring_parameter`(Phase 2 분기별 재보정을 재배포 없이 처리 + 과거
+점수 재현), `daily_weather`(환경 영역 신호. 일지 미작성일에도 자동 수집되므로 `diary` 에 붙일
+수 없다). 온보딩 Q7 의 **`is_frequent_traveler`(잦은 출장·시차) 누락을 발견해 추가**. 셀 폭
+초과 검사를 스크립트에 넣으면서 `sleep_daytime_sleepiness`/`sleep_frequent_awakening` 이
+DB컬럼 셀(160px, 22자)을 넘겨 `sleep_daytime_drowsy`/`sleep_night_awakening` 로 개명 —
+결과적으로 수면 진단 4열이 전부 `sleep_*` 로 대칭이 됐다.
+
+**2026-08-10 (3차, 엔티티 동기화 + 4차, 발명 제거)**: 엔티티 코드를 ERD 에 동기화한 뒤,
+"근거 문서에 없는 것을 지어내지 않았는가"를 기준으로 전면 재감사해 아래를 되돌렸다.
+
+| 제거/변경 | 사유 |
+|---|---|
+| `daily_weather` 테이블 **삭제** | 기획의 근거는 "날씨(위치 기반) ★자동 / 환경 맥락(입력 없음) / 점수 미반영" 세 줄뿐인데 위경도·최저/최고기온·강수량·습도를 지어냈다. 환경 영역은 4영역 재정규화로 이미 점수에서 빠져 있다 |
+| `scoring_parameter` 테이블 **삭제** → `ScoringProperties` | 기획은 "분기별 재보정"만 말한다. 파라미터를 DB 행으로 두는 건 내 결정이었고 `anchor_revision` 은 완전한 발명. Spring `@ConfigurationProperties` 로 강등하고 `daily_score.scoring_version` 은 평범한 문자열 태그로 되돌렸다 |
+| `user` 약관 3열 → **`user_agreement` 테이블** | 목업 `03_TERMS` 는 항목 4개를 개별 체크박스로 보여준다. "필수라 항상 true" 는 논증이지 근거가 아니었다 |
+| `diary.sleep_minutes` **삭제** | 두 시각에서 나오는 파생값. 저장 이유로 든 "자정 규칙 분산"은 계산 메서드가 이미 해결하고 있었다 |
+| `SleepType` 취침구간 필드 **삭제** | 예민형 구간이 기획에 없어 "일반형과 동일"로 추정했다. 미사용 `crossesMidnight()` 도 함께 |
+| `MoodRecovery` → **비채점** | §8 표에 행이 없고 '잠깐=60' 한 점만 확인된다. 앵커가 없으면 비채점으로 두는 `ExerciseType` 기준과 일관되게 맞췄다 |
+| `who5_cheerful/calm/...` → **`who5_q1~q5`** | 실제 WHO-5 문항이지만 기획에 목록이 없다. 번호는 아무 주장도 하지 않는다 |
+| 미사용 헬퍼 5개 삭제 | `sleepIssueCount` `who5Score` `isCurrentSmoker` `crossesMidnight` `calculateSleepMinutes` — 전부 호출처 0. 채점 계층이 생길 때 그쪽에서 만든다 |
+
+**스키마 관리를 Flyway 로 전환** — `src/main/resources/db/migration/V1__init.sql` 이 단일
+소스이고 `ddl-auto=validate` 다. 직전까지 쓰던 `ddl-auto=update` + 손으로 관리하는 컬럼
+미러는 이 문제의 표준 해법(마이그레이션 도구)을 놔두고 즉석에서 만든 장치였다.
+
+> **동기화 유지 장치** — 런타임에는 `ddl-auto=validate` 가 부팅 시점에 매핑과 실제 테이블을
+> 대조한다. 다만 그건 실제 MySQL 이 있어야 동작하므로, CI 를 위해 `SchemaGenerationTest` 가
+> DB 없이 **엔티티가 생성하는 DDL 과 `V1__init.sql` 을 파싱해 대조**한다(테이블·컬럼·제약).
+> 기대 컬럼 목록을 테스트에 손으로 적지 않으므로 관리할 사본이 늘지 않는다.
+> Docker 를 쓸 수 있게 되면 Testcontainers + 실제 MySQL 로 대체하는 것이 정석이다.
+
+> **enum 컬럼 주의** — MySQLDialect 는 `@Enumerated(STRING)` 을 네이티브 `enum('A','B',…)`
+> 타입으로 매핑해 선택지 목록을 컬럼 정의에 박는다. 그러면 상수를 하나 추가할 때마다 ALTER
+> 마이그레이션이 필요하다. 모든 enum 필드에 `@JdbcTypeCode(SqlTypes.VARCHAR)` 를 붙여
+> `VARCHAR(32)` 로 강제한다. **새 enum 컬럼에서 이 애노테이션을 빠뜨리지 말 것**
+> (전역 설정 `hibernate.type.prefer_native_enum_types` 는 Hibernate 7.4.1 에서 동작하지 않았다).
 
 **남은 부채 (지금 임의로 고치지 말 것 — 사용자가 요청할 때 처리)**:
 
-- 없음. 새로 발견되는 항목은 이 자리에 추가할 것.
+- **배포 DB 초기화** — `V1__init.sql` 은 빈 스키마를 전제한 초기 마이그레이션이다. 배포 DB 에는
+  구 스키마(`login_id` 등)가 남아 있으므로 **그 스키마를 drop 후 재생성해야** Flyway 가 V1 을
+  적용할 수 있다. 실데이터가 있다면 대신 `flyway.baselineOnMigrate` + 차이를 메우는 V2 를
+  손으로 작성해야 한다. 서비스 전 단계라면 drop 이 가장 싸다.
+- **`MoodRecovery` 앵커** — 기획 §8 기준표에 이 항목의 행이 없다. 확정되면 `ScoredOption` 을
+  구현시킨다. `SleepType` 의 예민형 취침 구간도 같은 상태다.
+- **`WalkDuration` 구간** — 기획에 "30분↓~2시간↑" 만 있고 중간 구간이 없다. 비채점이라
+  점수 영향은 없지만 목업 확정 시 대조할 것. **현재 설계에서 유일하게 남은 추측이다.**
+- **Phase 2 확정 대기** — 목업 미반영 항목은 이제 ERD 에 음영으로 **그려져 있다**(더 이상
+  누락이 아니다). 다만 기획자 확인 전까지 구현하지 않는다. **Phase 1 만 구현하면 사회 영역의
+  점수원이 온보딩·일지 양쪽 모두 0개라 `daily_score.social_score` 가 항상 NULL** 이고,
+  `caffeine_sensitivity` 로 산출한 `k_caffeine` 은 곱할 일지 항목이 없어 죽은 값이 된다.
+  즉 5영역 중 신체·정신만 온전하고 감정은 반쪽, 사회는 0 이다. 기획자에게 넘긴 상태.
+- **`dna_info` 재응시 이력** — 현재 1:1 단일 행이라 온보딩 재진단 시 원본이 덮어써진다.
+  기획에 재진단 언급이 없어 근거 없이 만들지 않았다. 요구가 생기면 `dna_info_history` 추가.
+- **개선책 탭** — 목업 하단 네비에 "개선책" 이 있으나 기획 3부작에 로직이 전혀 없다.
+  추측으로 테이블을 만들지 않았다. 기획이 나오면 설계한다.
+- **인증 토큰 저장** — 로그인이 있으나 세션/리프레시 토큰 정책이 기획에 없다.
+  JWT stateless 면 테이블이 불필요하므로 정책 확정 후 판단한다.
 
 ---
 
@@ -258,7 +340,7 @@ ERD 는 한 변에 여러 관계가 몰릴 수 있어 아래처럼 변수 분수
 | `String` (`@Column(length=n)`) | `VARCHAR(n)` |
 | `String` (`@Lob`/대용량 텍스트) | `TEXT` |
 | `Integer`/`int` | `INT` |
-| Java enum (`@Enumerated(EnumType.ORDINAL)`) | `INT` — 이 프로젝트는 카테고리성 컬럼(빈도/리듬 등)을 문자열 대신 정수 enum 코드로 저장한다(§0 확정 사항). `dna_info.sleep_type`/`smoking_frequency`/`drink_frequency`/`life_rhythm`/`weekend_rhythm` 이 실사용 예 |
+| Java enum (`@Enumerated(EnumType.STRING)`) | `VARCHAR(32)` — **2026-08-10 변경.** 카테고리성 컬럼(수면유형/빈도/구간칩 등)은 전부 문자열 enum 이다. 기획 선택지가 계속 개정되므로 ORDINAL(서수 고정)은 기존 행의 의미를 바꿔버린다. 각 enum 상수가 산식 §8 의 0~100 정규화 앵커를 필드로 들고 있는 것을 전제로 한다 |
 | `Long`/`long` (FK 등으로 필요할 경우) | `BIGINT` |
 | `Boolean`/`boolean` | `BOOLEAN` |
 | `java.time.LocalDate` | `DATE` |
@@ -313,25 +395,68 @@ JPA 관계 양쪽을 보고 결정한다. **`@***ToMany`/컬렉션 쪽이 N, 단
 ## 8. 한글 라벨 컨벤션
 
 - **테이블 헤더 형식**: `한글명(영문 테이블명)` — 괄호 앞 공백 없음, 영문은 실제 DB 테이블명
-  (snake_case). 예) `사용자(user)`, `DNA 정보(dna_info)`, `일지(diary)`.
+  (snake_case). 예) `사용자(user)`, `DNA 정보(dna_info)`, `일지(diary)`, `일별 점수(daily_score)`.
   (다른 프로젝트의 `테이블명(@@map값) (한글명)` 형식과 순서가 반대이니 혼동 주의.)
-- **컬럼 한글명 용어집** (현재 ERD 에서 추출, 일관 유지 — 새 컬럼 추가 시 이 표에도 추가):
+- **컬럼 한글명 용어집** (현재 ERD 에서 추출, 일관 유지 — 새 컬럼 추가 시 이 표에도 추가.
+  한글명 셀 폭이 100px 이라 **8자 이내**로 줄여야 잘리지 않는다):
 
 | DB 컬럼 | 한글 | DB 컬럼 | 한글 |
 |---|---|---|---|
-| id | 아이디 | sleep_quality | 수면 품질 |
-| login_id | 로그인아이디 | caffein_sensitivity | 카페인 민감도 |
-| password | 비밀번호 | insulin_sensitivity | 당분 민감도 |
-| author_id | 작성자 아이디 | stress_sensitivity | 스트레스 민감도 |
-| total_score | 종합 점수 | weekly_exercise_frequency | 주평균 운동 수 |
-| sleep_type | 수면 유형 | is_smoker | 흡연 여부 |
-| smoking_frequency | 흡연 빈도 | is_shift_worker | 교대 근무 여부 |
-| is_drinker | 음주 여부 | drink_frequency | 음주 빈도 |
-| life_rhythm | 생활 리듬 | weekend_rhythm | 주말 리듬 |
-| sleep_started_time | 취침 시간 | sleep_ended_time | 기상 시간 |
-| sleep_waiting_time | 취침까지 소요 시간 | sleep_satisfaction | 수면 만족도 |
+| id | 아이디 | email | 이메일 |
+| password | 비밀번호 | nickname | 닉네임 |
+| birth_year | 출생연도 | terms_agreed_at | 필수약관 동의시각 |
+| marketing_agreed | 마케팅 수신동의 | marketing_agreed_at | 마케팅 동의시각 |
+| created_at | 생성 시각 | updated_at | 수정 시각 |
+| terms_agreed_at | 약관 동의시각 | marketing_agreed | 마케팅 동의 |
+| sleep_type | 수면 유형 | sleep_daytime_drowsy | 낮 졸림 |
+| sleep_onset_delayed | 입면 지연 | sleep_night_awakening | 야간 각성 |
+| sleep_unrefreshed | 비회복 수면 | sugar_sensitivity | 당분 민감도 |
+| caffeine_sensitivity | 카페인 민감도 | stress_sensitivity | 스트레스 민감도 |
+| exercise_level | 운동량 | is_shift_worker | 교대 근무 |
+| is_frequent_traveler | 잦은 출장 | drink_frequency | 음주 빈도 |
+| smoking_status | 흡연 상태 | life_rhythm | 생활 리듬 |
+| social_contact_level | 사회 교류 | who5_cheerful | 웰빙-활기 |
+| who5_calm | 웰빙-평온 | who5_active | 웰빙-활동 |
+| who5_rested | 웰빙-개운 | who5_interested | 웰빙-흥미 |
+| completed_at | 진단 완료시각 | author_id | 작성자 아이디 |
+| log_date | 기록 일자 | condition_level | 오늘 컨디션 |
+| sleep_started_at | 취침 시각 | sleep_ended_at | 기상 시각 |
+| sleep_minutes | 수면 시간(분) | sleep_latency | 잠들기까지 |
+| sleep_satisfaction | 수면 만족도 | sugar_intake | 당분 섭취 |
+| caffeine_cups | 카페인 잔수 | caffeine_last_time | 카페인 시각 |
+| water_intake | 수분 섭취량 | exercised | 운동 여부 |
+| exercise_duration | 운동 시간 | exercise_type | 운동 종류 |
+| sitting_hours | 좌식 시간 | stress_level | 스트레스 지수 |
+| mood_recovery | 기분 회복활동 | social_contact | 사람 만남 |
+| meal_count | 식사 횟수 ※ | walk_duration | 걸은 시간 ※ |
+| screen_time | 화면 사용 ※ | user_id | 사용자 아이디 |
+| score_date | 기준 일자 | physical_score | 신체 점수 |
+| mental_score | 정신 점수 | emotion_score | 감정 점수 |
+| social_score | 사회 점수 | environment_score | 환경 점수 |
+| daily_total | 당일 종합 | display_total | 표시 종합 |
+| scoring_version | 채점 버전 | version | 버전 |
+| phase | 단계 | weight_physical | 신체 가중치 |
+| weight_mental | 정신 가중치 | weight_emotion | 감정 가중치 |
+| weight_social | 사회 가중치 | weight_environment | 환경 가중치 |
+| alpha_shrinkage | α 수렴상수 | alpha_cap | α 상한 |
+| moving_average_days | 이동평균 일수 | anchor_revision | 앵커 개정본 |
+| activated_at | 적용 시작 | deactivated_at | 적용 종료 |
+| note | 비고 | observed_date | 관측 일자 |
+| latitude | 위도 | longitude | 경도 |
+| weather_code | 날씨 코드 | temperature_avg | 평균 기온 |
+| temperature_min | 최저 기온 | temperature_max | 최고 기온 |
+| precipitation | 강수량 | humidity | 습도 |
 
-도메인 한글명: User=사용자, DnaInfo=DNA 정보, Diary=일지.
+`※` = 참고 항목(비채점). 국제 표준·역치가 없어 기록만 하고 채점에서 제외한다 — 범례에 설명이 있다.
+
+**폐기된 컬럼** (구 ERD 에 있었으나 기획 개정으로 사라짐 — 되살리지 말 것):
+`login_id`, `total_score`, `sleep_quality`, `caffein_sensitivity`(오타), `insulin_sensitivity`,
+`weekly_exercise_frequency`, `is_smoker`, `smoking_frequency`, `is_drinker`, `weekend_rhythm`,
+`sleep_started_time`/`sleep_ended_time`/`sleep_waiting_time`(→ `_at` / `sleep_latency` 로 대체),
+`sleep_daytime_sleepiness`/`sleep_frequent_awakening`(→ `_drowsy` / `sleep_night_awakening`, 셀 폭 초과).
+
+도메인 한글명: User=사용자, DnaInfo=DNA 정보, Diary=일지, DailyScore=일별 점수,
+ScoringParameter=채점 파라미터, DailyWeather=일별 날씨.
 
 ---
 
@@ -378,10 +503,29 @@ Depth 3          : (향후 diary/dna_info 에서 파생되는 테이블 등)
 
 ## 11. 자가 검증
 
+**1순위 — 생성 스크립트를 돌린다.** 아래를 전부 코드로 검사하고 실패하면 파일을 쓰지 않는다:
+
+| 검사 | 근거 |
+|---|---|
+| AABB 겹침 (H/V_GUTTER) | §2.4 |
+| 앵커 (변, 분수) 중복 | §4.3 |
+| collinear 포개짐 (수직 같은 x / 수평 같은 y 구간 중첩) | §2.1-3 |
+| 엣지의 **테이블** 관통 | §4.5 |
+| 엣지의 **메모 박스** 관통 | ERD 전용 보강 — 선이 글씨를 가로지르면 못 읽는다 |
+| waypoint **및 exit/entry 접점**의 10배수 격자 | §1, §13.14 |
+| 셀 텍스트 폭 초과 (8/22/13/6자) | `overflow=hidden` 이라 **조용히 잘린다** — 눈으로 못 잡는 실패 |
+
+
+```bash
+node scripts/gen-erd.mjs
+```
+
+아래 grep 들은 스크립트가 못 잡는 것(테이블 수 대조, 범례 훼손 여부)을 보는 **보조** 수단이다.
+
 ```bash
 # (1) ERD 의 shape=table 수 확인 (범례 예제 테이블 1개 포함)
 grep -oE 'shape=table;' docs/diagram/ERD.drawio | wc -l
-# → §0 "현재 테이블 체크리스트" 행 수 + 1(범례) 과 일치해야 함
+# → §0 "현재 테이블 체크리스트" 행 수 + 1(범례) 과 일치해야 함 (현재 7)
 
 # (2) 엔티티 코드가 있다면, 거기 정의된 테이블명이 ERD 헤더에 모두 있는지
 grep -rl '@Entity' src/main/java 2>/dev/null
@@ -389,6 +533,7 @@ grep -rl '@Entity' src/main/java 2>/dev/null
 #  없으면: §0 체크리스트가 유일한 기준 — 그 표와 ERD 헤더를 눈으로 대조
 
 # (3) 좌표가 격자(10의 배수)인지 — mxPoint/mxGeometry 실좌표만 (vertex="1" 오탐 제외)
+#     범례 카디널리티 예시선의 y (1814/1854/1894/1934 = 8px dot 중심) 4쌍만 예외 (§13.14)
 grep -oE '<mx(Point|Geometry|Rectangle)[^>]*' docs/diagram/ERD.drawio \
   | grep -oE '(^|[ ])(x|y)="[0-9]+"' | grep -vE '0"$'
 
