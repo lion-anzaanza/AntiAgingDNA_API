@@ -109,6 +109,36 @@ class SchemaGenerationTest {
         assertThat(tablesOf(entityDdl).get("dna_info")).doesNotContain("user_id");
     }
 
+    /**
+     * Flyway 가 실제로 <b>실행될 수 있는 상태</b>인지 본다.
+     *
+     * <p>2026-08-10 에 이걸 놓쳐서 배포가 크래시 루프에 빠졌다. `org.flywaydb:flyway-core` 만
+     * 의존성에 넣었는데, Spring Boot 4 는 자동설정을 모듈별로 분리해서 <b>라이브러리는 올라가도
+     * 마이그레이션이 돌지 않는다</b>. Flyway 가 침묵한 채 `ddl-auto=validate` 만 동작해
+     * `missing table [daily_score]` 로 부팅에 실패했다.
+     *
+     * <p>이 실패는 DB 없이는 기존 테스트로 잡히지 않았다 — 매핑 검증은 스프링을 띄우지 않고,
+     * `contextLoads` 는 DB 가 없어 어차피 실패하기 때문이다. 그래서 클래스패스 수준에서 본다.
+     */
+    @Test
+    void Flyway_자동설정과_마이그레이션이_클래스패스에_있다() {
+        assertThat(
+                        Thread.currentThread()
+                                .getContextClassLoader()
+                                .getResource(
+                                        "org/springframework/boot/flyway/autoconfigure/FlywayAutoConfiguration.class"))
+                .describedAs(
+                        "spring-boot-flyway 모듈이 없다. flyway-core 만으로는 마이그레이션이 실행되지 않는다")
+                .isNotNull();
+
+        assertThat(MIGRATION)
+                .describedAs("Flyway 기본 위치(classpath:db/migration)의 마이그레이션")
+                .exists();
+        assertThat(MIGRATION.getFileName().toString())
+                .describedAs("Flyway 네이밍 규칙 V<버전>__<설명>.sql")
+                .matches("V\\d+(\\.\\d+)*__.+\\.sql");
+    }
+
     @Test
     void enum_은_네이티브_ENUM_이_아니라_VARCHAR_로_매핑된다() {
         // MySQLDialect 기본값은 enum('A','B',…) 라 선택지 목록이 컬럼 정의에 박힌다.

@@ -22,7 +22,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0'
 	// 스키마 단일 소스. ddl-auto=validate 와 함께 쓴다 (src/main/resources/db/migration)
-	implementation 'org.flywaydb:flyway-core'
+	// spring-boot-flyway 가 반드시 있어야 한다 — Spring Boot 4 는 자동설정을 모듈별로
+	// 분리해서, flyway-core 만 넣으면 라이브러리는 올라가지만 마이그레이션이 실행되지 않는다.
+	implementation 'org.springframework.boot:spring-boot-flyway'
 	implementation 'org.flywaydb:flyway-mysql'
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	compileOnly 'org.projectlombok:lombok'
