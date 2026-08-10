@@ -183,4 +183,38 @@ public class Diary extends BaseTimeEntity {
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "screen_time", length = 32)
     private ScreenTime screenTime;
+
+    /**
+     * 같은 날짜의 일지를 새 입력으로 <b>통째로</b> 교체한다. {@code id}·{@code author}·
+     * {@code logDate}·감사 컬럼은 유지된다.
+     *
+     * <p>부분 갱신(PATCH)이 아니라 전체 교체다. 미입력({@code null})은 "안 바꿈"이 아니라
+     * "지움"이어야 한다 — 잘못 고른 항목을 되돌릴 방법이 있어야 하고, 채점에서 결측과 값의
+     * 구분이 의미를 갖기 때문이다.
+     *
+     * <p>세터를 열지 않고 이 메서드 하나만 두는 이유는, 바뀔 수 있는 시점을 한 곳으로
+     * 모아두기 위해서다. 필드를 추가하고 여기 복사를 빠뜨리는 사고는
+     * {@code DiaryReplaceCoverageTest} 가 막는다.
+     */
+    public void replaceWith(Diary source) {
+        this.conditionLevel = source.conditionLevel;
+        this.sleepStartedAt = source.sleepStartedAt;
+        this.sleepEndedAt = source.sleepEndedAt;
+        this.sleepLatency = source.sleepLatency;
+        this.sleepSatisfaction = source.sleepSatisfaction;
+        this.sugarIntake = source.sugarIntake;
+        this.caffeineCups = source.caffeineCups;
+        this.caffeineLastTime = source.caffeineLastTime;
+        this.waterIntake = source.waterIntake;
+        this.exercised = source.exercised;
+        this.exerciseDuration = source.exerciseDuration;
+        this.exerciseType = source.exerciseType;
+        this.sittingHours = source.sittingHours;
+        this.stressLevel = source.stressLevel;
+        this.moodRecovery = source.moodRecovery;
+        this.socialContact = source.socialContact;
+        this.mealCount = source.mealCount;
+        this.walkDuration = source.walkDuration;
+        this.screenTime = source.screenTime;
+    }
 }

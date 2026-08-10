@@ -1,6 +1,7 @@
 package cloud.anzaanza.antiagingdna.controller;
 
 import cloud.anzaanza.antiagingdna.exception.DiagnosisNotFoundException;
+import cloud.anzaanza.antiagingdna.exception.DiaryNotFoundException;
 import cloud.anzaanza.antiagingdna.exception.EmailAlreadyUsedException;
 import cloud.anzaanza.antiagingdna.exception.SignUpNotAllowedException;
 import java.util.LinkedHashMap;
@@ -36,6 +37,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(EmailAlreadyUsedException.class)
     public ProblemDetail handleEmailAlreadyUsed(EmailAlreadyUsedException e) {
         return problem(HttpStatus.CONFLICT, "이메일 중복", e.getMessage());
+    }
+
+    @ExceptionHandler(DiaryNotFoundException.class)
+    public ProblemDetail handleDiaryNotFound(DiaryNotFoundException e) {
+        return problem(HttpStatus.NOT_FOUND, "일지 없음", e.getMessage());
     }
 
     @ExceptionHandler(DiagnosisNotFoundException.class)

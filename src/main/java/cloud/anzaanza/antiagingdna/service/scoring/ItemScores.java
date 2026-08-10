@@ -32,13 +32,17 @@ public final class ItemScores {
     private ItemScores() {}
 
     /**
-     * 수면시간 — 진짜 U자 항목은 이것 하나뿐이다 (기획 일지 §5).
-     * {@code s = 100 − 15 × (이상구간 7~9h 밖 거리)}
+     * 취침·기상 시각 → 수면 시간(분). 저장하지 않고 그때그때 계산한다
+     * (기획 일지 §2 "Ⓘ 시각 입력 → 자동 계산").
      *
      * <p>기상 시각이 취침 시각보다 이르거나 같으면 자정을 넘긴 것으로 본다. 일지는 하루 1건이고
      * 날짜 없이 시각만 받으므로, 그 외의 해석이 없다.
+     *
+     * <p>채점과 조회 응답이 <b>같은 규칙</b>을 써야 하므로 여기 한 곳에만 둔다.
+     *
+     * @return 둘 중 하나라도 없으면 {@code null}
      */
-    public static Double sleepDuration(LocalTime bedtime, LocalTime wakeTime) {
+    public static Long sleepMinutes(LocalTime bedtime, LocalTime wakeTime) {
         if (bedtime == null || wakeTime == null) {
             return null;
         }
@@ -46,7 +50,19 @@ public final class ItemScores {
         if (!slept.isPositive()) {
             slept = slept.plusDays(1);
         }
-        double hours = slept.toMinutes() / 60.0;
+        return slept.toMinutes();
+    }
+
+    /**
+     * 수면시간 — 진짜 U자 항목은 이것 하나뿐이다 (기획 일지 §5).
+     * {@code s = 100 − 15 × (이상구간 7~9h 밖 거리)}
+     */
+    public static Double sleepDuration(LocalTime bedtime, LocalTime wakeTime) {
+        Long minutes = sleepMinutes(bedtime, wakeTime);
+        if (minutes == null) {
+            return null;
+        }
+        double hours = minutes / 60.0;
         double distance = Math.max(0, Math.max(IDEAL_SLEEP_MIN_HOURS - hours, hours - IDEAL_SLEEP_MAX_HOURS));
         return clamp(100 - SLEEP_PENALTY_PER_HOUR * distance);
     }
