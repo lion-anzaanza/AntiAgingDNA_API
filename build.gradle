@@ -41,6 +41,12 @@ dependencies {
 	// DB 가 없어 @SpringBootTest 를 못 띄우므로, 배포 전에 인증 설정을 확인할 유일한 수단이다.
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testImplementation 'org.springframework.security:spring-security-test'
+	// 실제 MySQL 로 부팅·마이그레이션·영속성을 검증한다. Docker 가 없으면 해당 테스트만
+	// 건너뛴다(@Testcontainers(disabledWithoutDocker = true)).
+	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	// Testcontainers 2.x 는 모듈 좌표에 testcontainers- 접두사를 쓴다 (1.x 의 :mysql 아님)
+	testImplementation 'org.testcontainers:testcontainers-mysql'
+	testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
 	testCompileOnly 'org.projectlombok:lombok'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.projectlombok:lombok'

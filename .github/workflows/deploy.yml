@@ -1,11 +1,43 @@
-name: Deploy to EC2
+name: Test & Deploy
 
+# 테스트를 배포 앞단에 둔다. 이전에는 이 워크플로가 이미지만 만들었는데, Dockerfile 이
+# 실행하는 bootJar 는 test 에 의존하지 않아서 테스트가 어디서도 자동 실행되지 않았다.
+# 깨진 테스트를 안고도 배포가 성공했다는 뜻이다.
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # runner 에는 Docker 가 기본 탑재라 Testcontainers 통합 테스트가 그대로 실행된다.
+      # 개발 머신에 Docker 가 없으면 그 테스트들만 건너뛰지만, 여기서는 반드시 돈다.
+      - name: Run tests
+        run: ./gradlew test --no-daemon
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/test
+          retention-days: 7
+
   build-and-push:
+    needs: test
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

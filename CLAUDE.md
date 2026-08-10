@@ -15,9 +15,9 @@ Backend API server for "안티에이징 DNA" / LifeDNA — a Spring Boot REST AP
 # Run the app locally (requires DB_URL, DB_USERNAME, DB_PASSWORD, JWT_SECRET env vars — see below)
 ./gradlew bootRun
 
-# Run all tests
-# NOTE: AntiagingdnaApplicationTests.contextLoads always fails — @SpringBootTest needs a real
-# MySQL and there is none in CI or locally. Every other test is DB-free by design.
+# Run all tests. Tests that need a real MySQL extend `support/IntegrationTest` (Testcontainers)
+# and are SKIPPED when Docker is unreachable — a green local run may not have exercised them.
+# CI always runs them, and CI gates deploy.
 ./gradlew test
 
 # Run a single test class
@@ -42,5 +42,6 @@ There is no linter configured in this project.
 - **Missing vs zero**: throughout scoring, a null item means "not recorded" and is excluded then renormalized (기획 일지 §5) — never scored as 0. The one exception is 운동 "안 함", which is a real 0.
 - **Errors**: `controller/ApiExceptionHandler.java` extends `ResponseEntityExceptionHandler` and returns RFC 9457 `application/problem+json` for everything. Don't enable `spring.mvc.problemdetails` — it registers a competing advice that wins on validation errors.
 - **CORS**: wide-open CORS policy is defined centrally in `config/CorsConfig.java` (all origins/methods/headers allowed, credentials enabled) — don't add per-controller `@CrossOrigin` on top of it.
-- **Deployment**: Dockerized (multi-stage `Dockerfile`, builds a `bootJar`). CI/CD is GitHub Actions (`.github/workflows/deploy.yml`): on push to `main`, builds a multi-arch (amd64/arm64) image, pushes to Docker Hub, then SSHes into the EC2 host and redeploys the container. Infra details (host, containers, nginx, DNS, required GitHub secrets) are documented in `docs/INFRA_INFO.md` — check it before touching deploy config.
+- **Testing**: three layers. Pure unit tests (scoring formulas, DTOs) need nothing. `@WebMvcTest` slices exercise controllers **through the real security filter chain** — note Boot 4's slice does *not* include security autoconfiguration, hence `@EnableWebSecurity` on `SecurityConfig`. Integration tests extend `support/IntegrationTest`, which boots the app against a real MySQL container; they are the only place Flyway, `ddl-auto=validate`, and JPA persistence are actually verified. Several bespoke guards exist because those layers can't see everything: `SchemaGenerationTest` (entity DDL vs migration), `RepositoryQueryDerivationTest` (derived query names, which otherwise fail only at boot), `DiaryReplaceCoverageTest` (field-copy coverage).
+- **Deployment**: Dockerized (multi-stage `Dockerfile`, builds a `bootJar`). CI/CD is GitHub Actions (`.github/workflows/deploy.yml`): `test` → `build-and-push` → `deploy`. **Tests gate the deploy** — before this, `bootJar` never ran `test`, so a broken suite still shipped. Pull requests run `test` only. Infra details (host, containers, nginx, DNS, required GitHub secrets) are documented in `docs/INFRA_INFO.md` — check it before touching deploy config.
 - **Docs**: `docs/diagram/ERD.drawio` is the entity-relationship diagram; keep it in sync with entities as they're added (a drawio-editing skill is available for this — see `docs/diagram/SKILL.md`). `docs/ui/` holds UI mockups (auth flow, diary) for the client this API serves.
