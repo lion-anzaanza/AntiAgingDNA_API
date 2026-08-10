@@ -1,0 +1,55 @@
+# 일회용 진단 워크플로. 한글(3바이트 UTF-8) 본문이 400 으로 떨어지는 원인을 좁힌다.
+# 읽기 전용이며, 원인을 찾으면 삭제한다.
+#
+# 한글을 YAML/SSH 로 그대로 실어보내면 그 경로에서 깨졌을 가능성이 남는다. 그래서 본문의
+# 3바이트 문자를 \xea\xb0\x80(U+AC00 '가') 처럼 바이트로 직접 조립한다.
+name: Log probe (one-off)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: 54.210.141.169
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            set +e
+            HANGUL=$(printf '\xea\xb0\x80')
+            BODY='{"email":"probe@b.com","password":"password1234","nickname":"'"$HANGUL"'","birthYear":2000,"agreements":{"TERMS_OF_SERVICE":true}}'
+
+            echo "===== 0. 보낼 본문의 바이트 ====="
+            printf '%s' "$BODY" | od -An -tx1 | head -5
+
+            echo
+            echo "===== 1. 컨테이너 네트워크 안에서 앱으로 직접 (nginx 우회) ====="
+            docker run --rm --network container:antiagingdna curlimages/curl:latest \
+              -s -X POST http://localhost:8080/api/auth/signup \
+              -H 'Content-Type: application/json' --data-raw "$BODY"
+
+            echo
+            echo "===== 2. 호스트에서 nginx 경유 ====="
+            curl -s -X POST https://antiaging-dna.anzaanza.cloud/api/auth/signup \
+              -H 'Content-Type: application/json' --data-raw "$BODY"
+
+            echo
+            echo "===== 3. 대조군: 같은 경로로 ASCII 닉네임 ====="
+            ASCII_BODY='{"email":"probe@b.com","password":"password1234","nickname":"nn","birthYear":2000,"agreements":{"TERMS_OF_SERVICE":true}}'
+            docker run --rm --network container:antiagingdna curlimages/curl:latest \
+              -s -X POST http://localhost:8080/api/auth/signup \
+              -H 'Content-Type: application/json' --data-raw "$ASCII_BODY"
+
+            echo
+            echo "===== 4. JVM 기본 문자셋 / 로케일 ====="
+            docker exec antiagingdna sh -c 'echo "LANG=$LANG LC_ALL=$LC_ALL"'
+            docker exec antiagingdna java -XshowSettings:properties -version 2>&1 \
+              | grep -iE "encoding|user.language|user.country"
+
+            echo
+            echo "===== 5. 컨테이너 로그 (마지막 150줄) ====="
+            docker logs --tail 150 antiagingdna 2>&1
