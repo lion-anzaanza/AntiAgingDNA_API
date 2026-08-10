@@ -31,6 +31,10 @@
 | antiagingdna | jiseong02/antiagingdna:latest | 8080 |
 | mysql | mysql:8.0 | 3306 |
 
+- MySQL 실제 버전: **8.0.46** (`mysql:8.0` 태그가 가리키는 것). 이 값은
+  `SchemaGenerationTest.PROD_MYSQL_VERSION` 에 들어 있다 — 애플리케이션은 방언을
+  커넥션에서 자동 감지하는데, DB 없는 테스트가 같은 방언을 재현하려면 버전이 필요하다.
+  서버 MySQL 을 올리면 그 상수도 같이 올릴 것.
 - Docker network: `antiaging-net` (두 컨테이너 연결)
 - Spring Boot → MySQL 접속: `jdbc:mysql://mysql:3306/antiagingdna`
 - MySQL 3306 은 **외부에 노출되지 않는다** — 컨테이너 네트워크 내부 전용이라

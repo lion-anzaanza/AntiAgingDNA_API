@@ -44,6 +44,9 @@ class SchemaGenerationTest {
     private static final Path MIGRATION =
             Path.of("src", "main", "resources", "db", "migration", "V1__init.sql");
 
+    /** 운영 DB 버전(docs/INFRA_INFO.md). 서버를 올리면 이 값도 같이 올린다. */
+    private static final String PROD_MYSQL_VERSION = "8.0.46";
+
     private static String entityDdl;
     private static String migrationDdl;
 
@@ -53,10 +56,16 @@ class SchemaGenerationTest {
         Files.createDirectories(target.getParent());
         Files.deleteIfExists(target);
 
-        // application.properties 의 hibernate.* 설정과 동일하게 유지할 것
+        // application.properties 에는 hibernate.dialect 를 두지 않는다 — 운영에서는 살아있는
+        // 커넥션의 메타데이터로 방언이 자동 결정된다. 여기엔 DB 가 없으니 그 자동 결정에 쓰이는
+        // 입력(제품명/버전)을 직접 넣어 운영과 같은 방언이 뽑히게 한다. 방언 클래스를 하드코딩하면
+        // 버전 인식 방언(MySQL 8.0.46)이 타입을 다르게 매핑해도 이 테스트가 놓친다.
         Map<String, Object> settings = new HashMap<>();
-        settings.put("hibernate.dialect", "org.hibernate.dialect.MySQLDialect");
         settings.put("hibernate.boot.allow_jdbc_metadata_access", "false");
+        settings.put("jakarta.persistence.database-product-name", "MySQL");
+        settings.put("jakarta.persistence.database-product-version", PROD_MYSQL_VERSION);
+        settings.put("jakarta.persistence.database-major-version", "8");
+        settings.put("jakarta.persistence.database-minor-version", "0");
         settings.put("jakarta.persistence.schema-generation.scripts.action", "create");
         settings.put("jakarta.persistence.schema-generation.scripts.create-target", target.toString());
 
