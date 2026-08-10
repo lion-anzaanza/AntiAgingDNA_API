@@ -98,7 +98,7 @@ class DiaryServiceTest {
 
         diaryService.save(USER_ID, TODAY, request(6));
 
-        verify(scoringService).recalculate(USER_ID, TODAY);
+        verify(scoringService).recalculateFrom(USER_ID, TODAY);
     }
 
     /** 재채점이 일지를 다시 읽으므로 순서가 뒤집히면 직전 값으로 점수가 나온다 */
@@ -112,7 +112,7 @@ class DiaryServiceTest {
 
         InOrder order = inOrder(diaryRepository, scoringService);
         order.verify(diaryRepository).save(any(Diary.class));
-        order.verify(scoringService).recalculate(USER_ID, TODAY);
+        order.verify(scoringService).recalculateFrom(USER_ID, TODAY);
     }
 
     @Test
@@ -125,7 +125,7 @@ class DiaryServiceTest {
         InOrder order = inOrder(diaryRepository, scoringService);
         order.verify(diaryRepository).delete(any(Diary.class));
         order.verify(diaryRepository).flush(); // 재채점이 삭제 전 일지를 읽지 않도록
-        order.verify(scoringService).recalculate(USER_ID, TODAY);
+        order.verify(scoringService).recalculateFrom(USER_ID, TODAY);
     }
 
     // ── 조회 ─────────────────────────────────────────────────────
@@ -145,7 +145,7 @@ class DiaryServiceTest {
         assertThatThrownBy(() -> diaryService.delete(USER_ID, TODAY))
                 .isInstanceOf(DiaryNotFoundException.class);
 
-        verify(scoringService, never()).recalculate(any(String.class), any());
+        verify(scoringService, never()).recalculateFrom(any(String.class), any());
     }
 
     // ── 입력 정규화 ──────────────────────────────────────────────

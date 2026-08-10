@@ -41,4 +41,11 @@ public interface DailyScoreRepository extends JpaRepository<DailyScore, String> 
      * (7일 이동평균 창)에 의존하므로, 뒤에서부터 고치면 아직 옛 값인 이웃을 읽는다.
      */
     List<DailyScore> findByUserIdOrderByScoreDateAsc(String userId);
+
+    /**
+     * 어떤 날짜의 값이 바뀌면 <b>그 뒤의 모든 점수</b>가 영향을 받는다 — 7일 이동평균 창이
+     * 앞선 날짜를 읽고, {@code α(n)} 의 n 도 {@code scoreDate < date} 로 세기 때문이다.
+     */
+    List<DailyScore> findByUserIdAndScoreDateGreaterThanOrderByScoreDateAsc(
+            String userId, LocalDate date);
 }

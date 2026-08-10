@@ -242,6 +242,53 @@ class ScoringServiceTest {
         assertThat(scoringService.scoreOn(USER_ID, TODAY).getDisplayTotal()).isEqualByComparingTo("50.00");
     }
 
+    // ── 과거 날짜 일지 수정 → 뒤 날짜 파급 ───────────────────────
+
+    /**
+     * 자정 넘겨 어제 일지를 쓰는 것은 정상 경로다({@code log_date} 가 작성 시각과 별개).
+     * 그때 그 날짜만 고치면 오늘 점수의 7일 이동평균이 어제 값을 반영하지 못한 채 남는다.
+     */
+    @Test
+    void 과거_날짜를_고치면_그_뒤_날짜도_다시_산출된다() {
+        LocalDate yesterday = TODAY.minusDays(1);
+        givenDna();
+        givenSaveReturnsArgument();
+        given(diaryRepository.findByAuthorIdAndLogDate(anyString(), any())).willReturn(Optional.empty());
+        given(dailyScoreRepository.findByUserIdAndScoreDate(anyString(), any())).willReturn(Optional.empty());
+        given(dailyScoreRepository.findByUserIdAndScoreDateBetweenOrderByScoreDateAsc(
+                        anyString(), any(), any()))
+                .willReturn(List.of());
+        given(dailyScoreRepository.findByUserIdAndScoreDateGreaterThanOrderByScoreDateAsc(
+                        USER_ID, yesterday))
+                .willReturn(List.of(previousScore(TODAY, "50.00")));
+
+        assertThat(scoringService.recalculateFrom(USER_ID, yesterday)).isEqualTo(2);
+
+        ArgumentCaptor<DailyScore> saved = ArgumentCaptor.forClass(DailyScore.class);
+        verify(dailyScoreRepository, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues())
+                .extracting(DailyScore::getScoreDate)
+                .describedAs("바뀐 날짜 → 그 뒤 날짜 순서로")
+                .containsExactly(yesterday, TODAY);
+    }
+
+    /** 오늘 일지를 쓰는 일반적인 경우엔 뒤 날짜가 없으므로 한 번만 돈다 */
+    @Test
+    void 오늘_날짜를_고치면_한_번만_산출한다() {
+        givenDna();
+        givenSaveReturnsArgument();
+        given(diaryRepository.findByAuthorIdAndLogDate(anyString(), any())).willReturn(Optional.empty());
+        given(dailyScoreRepository.findByUserIdAndScoreDate(anyString(), any())).willReturn(Optional.empty());
+        given(dailyScoreRepository.findByUserIdAndScoreDateBetweenOrderByScoreDateAsc(
+                        anyString(), any(), any()))
+                .willReturn(List.of());
+        given(dailyScoreRepository.findByUserIdAndScoreDateGreaterThanOrderByScoreDateAsc(USER_ID, TODAY))
+                .willReturn(List.of());
+
+        assertThat(scoringService.recalculateFrom(USER_ID, TODAY)).isEqualTo(1);
+        verify(dailyScoreRepository, times(1)).save(any(DailyScore.class));
+    }
+
     // ── 재채점 (scoring.version 변경 후) ─────────────────────────
 
     @Test

@@ -111,6 +111,38 @@ public class ScoringService {
     }
 
     /**
+     * 그 날짜와 <b>그 뒤에 이미 존재하는 모든 점수</b>를 다시 산출한다. 일지를 쓰거나 지운
+     * 트랜잭션에서 호출한다.
+     *
+     * <p>해당 날짜만 고치면 안 되는 이유 — 결합값의 7일 이동평균 창이 앞선 날짜의 영역 점수를
+     * 읽고, {@code α(n)} 의 n 도 {@code scoreDate < date} 로 센다. 어제 일지를 자정 넘겨
+     * 쓰는 것은 정상 경로인데(하루 1건 · {@code log_date} 가 작성 시각과 별개), 그때 오늘 점수가
+     * 어제 값을 반영하지 않은 채 남는다.
+     *
+     * <p>없는 날짜를 만들지는 않는다. 이미 조회된 적 있는 행만 갱신하고, 나머지는 조회 시점에
+     * read-through 로 채워지면서 그때의 최신 값으로 계산된다.
+     *
+     * @return 다시 산출한 행 수 (해당 날짜 포함)
+     */
+    @Transactional
+    public int recalculateFrom(String userId, LocalDate date) {
+        DnaInfo dna = dnaInfoRepository
+                .findById(userId)
+                .orElseThrow(() -> new DiagnosisNotFoundException(userId));
+
+        recalculate(dna, date);
+
+        List<LocalDate> later =
+                dailyScoreRepository.findByUserIdAndScoreDateGreaterThanOrderByScoreDateAsc(userId, date).stream()
+                        .map(DailyScore::getScoreDate)
+                        .toList();
+        for (LocalDate affected : later) {
+            recalculate(dna, affected);
+        }
+        return later.size() + 1;
+    }
+
+    /**
      * 그날의 점수를 돌려준다. 행이 없으면 그 자리에서 산출해 저장한다(read-through).
      *
      * <p>일지를 쓰지 않은 날에도 표시 점수는 존재해야 하는데(기획 §C), 그 행을 만들어 줄 주체가
