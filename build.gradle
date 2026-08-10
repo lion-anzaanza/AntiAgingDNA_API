@@ -20,6 +20,12 @@ repositories {
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	// JWT 를 직접 파싱하지 않는다. oauth2-resource-server 가 Bearer 토큰 추출·서명 검증·
+	// 만료 확인·SecurityContext 주입까지 필터로 처리하므로 손으로 짤 필터가 없다.
+	// 토큰 발급도 같은 모듈의 NimbusJwtEncoder 를 쓴다 (별도 JWT 라이브러리 불필요).
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0'
 	// 스키마 단일 소스. ddl-auto=validate 와 함께 쓴다 (src/main/resources/db/migration)
 	// spring-boot-flyway 가 반드시 있어야 한다 — Spring Boot 4 는 자동설정을 모듈별로
@@ -30,6 +36,11 @@ dependencies {
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	// @WebMvcTest — 시큐리티 필터 체인까지 태운 채로 컨트롤러를 검증한다.
+	// DB 가 없어 @SpringBootTest 를 못 띄우므로, 배포 전에 인증 설정을 확인할 유일한 수단이다.
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.springframework.security:spring-security-test'
 	testCompileOnly 'org.projectlombok:lombok'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.projectlombok:lombok'

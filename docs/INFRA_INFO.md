@@ -103,8 +103,16 @@ curl https://antiaging-dna.anzaanza.cloud/health     # → {"status":"ok"}
 
 | 위치 | 내용 |
 |---|---|
-| GitHub Secrets | `DOCKERHUB_USERNAME` · `DOCKERHUB_TOKEN` · `EC2_SSH_KEY` · `DB_URL` · `DB_USERNAME` · `DB_PASSWORD` |
+| GitHub Secrets | `DOCKERHUB_USERNAME` · `DOCKERHUB_TOKEN` · `EC2_SSH_KEY` · `DB_URL` · `DB_USERNAME` · `DB_PASSWORD` · `JWT_SECRET` |
 | 로컬 전용 파일 | SSH/DB 접속 정보. `.gitignore` 의 `*DO_NOT_CUMMIT*` · `*SSH_ONLY*` · `*.pem` · `*.key` 패턴으로 차단 |
+
+> **`JWT_SECRET`** — 액세스 토큰 서명 키(HS256). **32바이트 이상**이어야 하고 없으면 앱이
+> 부팅에 실패한다(`jwt.secret=${JWT_SECRET}`, 기본값 없음). 값을 바꾸면 이미 발급된 토큰이
+> 전부 무효가 되어 사용자가 전원 로그아웃된다.
+>
+> ```bash
+> gh secret set JWT_SECRET --body "$(openssl rand -base64 48)"
+> ```
 
 > **주의** — `.gitignore` 가 한때 특정 **파일명 하나**(`docs/SSH_ONLY_FOR_LOCAL.txt`)만
 > 막고 있었다. 그 파일이 다른 이름으로 바뀌자 자격증명이 무방비 상태가 됐고, 이 저장소는
