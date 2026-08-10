@@ -3,6 +3,8 @@ package cloud.anzaanza.antiagingdna.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -26,7 +28,11 @@ import cloud.anzaanza.antiagingdna.exception.SignUpNotAllowedException;
 import cloud.anzaanza.antiagingdna.repository.DnaInfoRepository;
 import cloud.anzaanza.antiagingdna.repository.UserAgreementRepository;
 import cloud.anzaanza.antiagingdna.repository.UserRepository;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.Year;
+import java.time.ZoneId;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -50,14 +56,21 @@ class AuthServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private UserAgreementRepository userAgreementRepository;
     @Mock private DnaInfoRepository dnaInfoRepository;
+    @Mock private ScoringService scoringService;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final Clock clock = Clock.fixed(Instant.parse("2026-08-10T03:00:00Z"), ZoneId.of("Asia/Seoul"));
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
         authService = new AuthService(
-                userRepository, userAgreementRepository, dnaInfoRepository, passwordEncoder);
+                userRepository,
+                userAgreementRepository,
+                dnaInfoRepository,
+                passwordEncoder,
+                scoringService,
+                clock);
     }
 
     // ── 회원가입 ─────────────────────────────────────────────────
@@ -85,6 +98,20 @@ class AuthServiceTest {
         verify(dnaInfoRepository).save(any(DnaInfo.class));
         verify(userAgreementRepository, times(AgreementType.values().length))
                 .save(any(UserAgreement.class));
+    }
+
+    /**
+     * 가입 직후 메인 화면이 "점수 없음"으로 뜨면 안 된다. 일지가 0건이어도 온보딩 baseline
+     * 만으로 day-0 점수가 나온다 (기획 §A).
+     */
+    @Test
+    void 가입하면_그날의_day0_점수가_만들어진다() {
+        givenSaveReturnsArgument();
+        given(dnaInfoRepository.save(any(DnaInfo.class))).willAnswer(call -> call.getArgument(0));
+
+        authService.signUp(signUpRequest(allAgreed()));
+
+        verify(scoringService).recalculate(any(DnaInfo.class), eq(LocalDate.of(2026, 8, 10)));
     }
 
     /** "동의하지 않음"과 "묻지 않음"은 다른 사실이라, 거절한 항목도 행으로 남아야 한다 */

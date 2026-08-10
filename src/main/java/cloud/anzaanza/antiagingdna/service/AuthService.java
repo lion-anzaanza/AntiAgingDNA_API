@@ -1,6 +1,7 @@
 package cloud.anzaanza.antiagingdna.service;
 
 import cloud.anzaanza.antiagingdna.dto.SignUpRequest;
+import cloud.anzaanza.antiagingdna.entity.DnaInfo;
 import cloud.anzaanza.antiagingdna.entity.User;
 import cloud.anzaanza.antiagingdna.entity.UserAgreement;
 import cloud.anzaanza.antiagingdna.entity.enums.AgreementType;
@@ -9,6 +10,8 @@ import cloud.anzaanza.antiagingdna.exception.SignUpNotAllowedException;
 import cloud.anzaanza.antiagingdna.repository.DnaInfoRepository;
 import cloud.anzaanza.antiagingdna.repository.UserAgreementRepository;
 import cloud.anzaanza.antiagingdna.repository.UserRepository;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Year;
 import java.util.List;
@@ -41,17 +44,23 @@ public class AuthService {
     private final UserAgreementRepository userAgreementRepository;
     private final DnaInfoRepository dnaInfoRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ScoringService scoringService;
+    private final Clock clock;
     private final String dummyPasswordHash;
 
     public AuthService(
             UserRepository userRepository,
             UserAgreementRepository userAgreementRepository,
             DnaInfoRepository dnaInfoRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            ScoringService scoringService,
+            Clock clock) {
         this.userRepository = userRepository;
         this.userAgreementRepository = userAgreementRepository;
         this.dnaInfoRepository = dnaInfoRepository;
         this.passwordEncoder = passwordEncoder;
+        this.scoringService = scoringService;
+        this.clock = clock;
         this.dummyPasswordHash = passwordEncoder.encode(DUMMY_PASSWORD);
     }
 
@@ -74,8 +83,12 @@ public class AuthService {
                 .birthYear(request.birthYear())
                 .build());
 
-        dnaInfoRepository.save(request.diagnosis().toEntity(user));
+        DnaInfo dna = dnaInfoRepository.save(request.diagnosis().toEntity(user));
         saveAgreements(user, request.agreements());
+
+        // day-0 점수 — 일지가 0건이어도 온보딩 baseline 만으로 표시 점수가 나온다 (기획 §A).
+        // 가입 직후 메인 화면이 "점수 없음"으로 뜨지 않게 하는 것이 이 한 줄의 목적이다.
+        scoringService.recalculate(dna, LocalDate.now(clock));
         return user;
     }
 
