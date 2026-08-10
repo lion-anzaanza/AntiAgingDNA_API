@@ -31,7 +31,6 @@ import cloud.anzaanza.antiagingdna.repository.UserRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.Year;
 import java.time.ZoneId;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -165,7 +164,7 @@ class AuthServiceTest {
 
     @Test
     void 만_14세_미만이면_거부한다() {
-        int tooYoung = Year.now().getValue() - 13;
+        int tooYoung = LocalDate.now(clock).getYear() - 13;
 
         assertThatThrownBy(() -> authService.signUp(signUpRequest(allAgreed(), tooYoung)))
                 .isInstanceOf(SignUpNotAllowedException.class)
@@ -174,7 +173,7 @@ class AuthServiceTest {
 
     @Test
     void 미래의_출생연도는_거부한다() {
-        int future = Year.now().getValue() + 1;
+        int future = LocalDate.now(clock).getYear() + 1;
 
         assertThatThrownBy(() -> authService.signUp(signUpRequest(allAgreed(), future)))
                 .isInstanceOf(SignUpNotAllowedException.class);

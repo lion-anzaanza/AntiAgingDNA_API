@@ -28,6 +28,7 @@ import cloud.anzaanza.antiagingdna.entity.enums.WaterIntake;
 import cloud.anzaanza.antiagingdna.exception.DiaryNotFoundException;
 import cloud.anzaanza.antiagingdna.repository.DailyScoreRepository;
 import cloud.anzaanza.antiagingdna.support.IntegrationTest;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.EnumMap;
@@ -54,6 +55,20 @@ class ScoringPersistenceIntegrationTest extends IntegrationTest {
     @Autowired private ScoringService scoringService;
     @Autowired private DailyScoreRepository dailyScoreRepository;
 
+    /**
+     * "오늘"은 애플리케이션의 {@code Clock}(Asia/Seoul)에 물어봐야 한다.
+     *
+     * <p>{@code LocalDate.now()} 를 쓰면 JVM 기본 시간대를 따라간다. 개발 머신은 KST 라 늘
+     * 통과하지만 CI runner 는 UTC 다 — 한국 시간 00:00\~09:00 사이에 돌면 앱이 쓴 날짜와
+     * 테스트가 찾는 날짜가 하루 어긋난다. 실제로 첫 CI 실행(15:29 UTC = 익일 00:29 KST)이
+     * 이 이유로 깨졌다.
+     */
+    @Autowired private Clock clock;
+
+    private LocalDate today() {
+        return LocalDate.now(clock);
+    }
+
     private User newUser() {
         String email = "it-" + SEQUENCE.incrementAndGet() + "-" + System.nanoTime() + "@example.com";
         Map<AgreementType, Boolean> agreements = new EnumMap<>(AgreementType.class);
@@ -72,7 +87,7 @@ class ScoringPersistenceIntegrationTest extends IntegrationTest {
         User user = newUser();
 
         DailyScore dayZero = dailyScoreRepository
-                .findByUserIdAndScoreDate(user.getId(), LocalDate.now())
+                .findByUserIdAndScoreDate(user.getId(), today())
                 .orElseThrow();
 
         assertThat(dayZero.getDisplayTotal()).isNotNull();
@@ -89,7 +104,7 @@ class ScoringPersistenceIntegrationTest extends IntegrationTest {
     @Test
     void 기획_B3_예시가_DB_왕복_뒤에도_그대로_재현된다() {
         User user = newUser();
-        LocalDate today = LocalDate.now();
+        LocalDate today = today();
 
         diaryService.save(user.getId(), today, workedExampleDiary());
 
@@ -107,7 +122,7 @@ class ScoringPersistenceIntegrationTest extends IntegrationTest {
     @Test
     void 같은_날짜에_다시_저장해도_제약_위반이_없다() {
         User user = newUser();
-        LocalDate today = LocalDate.now();
+        LocalDate today = today();
 
         diaryService.save(user.getId(), today, workedExampleDiary());
         diaryService.save(user.getId(), today, workedExampleDiary());
@@ -124,7 +139,7 @@ class ScoringPersistenceIntegrationTest extends IntegrationTest {
     @Test
     void 과거_날짜_일지가_이미_저장된_뒤_날짜_점수를_바꾼다() {
         User user = newUser();
-        LocalDate today = LocalDate.now();
+        LocalDate today = today();
         LocalDate yesterday = today.minusDays(1);
 
         var beforeBackfill = scoringService.scoreOn(user.getId(), today).getDisplayTotal();
@@ -144,7 +159,7 @@ class ScoringPersistenceIntegrationTest extends IntegrationTest {
     @Test
     void 일지를_지우면_baseline_점수로_돌아간다() {
         User user = newUser();
-        LocalDate today = LocalDate.now();
+        LocalDate today = today();
 
         var baseline = scoringService.scoreOn(user.getId(), today).getDisplayTotal();
         diaryService.save(user.getId(), today, workedExampleDiary());
@@ -163,7 +178,7 @@ class ScoringPersistenceIntegrationTest extends IntegrationTest {
     @Test
     void 재채점은_멱등하다() {
         User user = newUser();
-        LocalDate today = LocalDate.now();
+        LocalDate today = today();
         diaryService.save(user.getId(), today, workedExampleDiary());
 
         List<DailyScore> before = dailyScoreRepository.findByUserIdOrderByScoreDateAsc(user.getId());
@@ -181,7 +196,7 @@ class ScoringPersistenceIntegrationTest extends IntegrationTest {
     @Test
     void 재채점은_행을_새로_만들지_않는다() {
         User user = newUser();
-        diaryService.save(user.getId(), LocalDate.now(), workedExampleDiary());
+        diaryService.save(user.getId(), today(), workedExampleDiary());
         var idsBefore = dailyScoreRepository.findByUserIdOrderByScoreDateAsc(user.getId()).stream()
                 .map(DailyScore::getId)
                 .toList();

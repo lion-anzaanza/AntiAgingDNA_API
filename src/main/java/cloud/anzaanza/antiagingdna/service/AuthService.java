@@ -13,7 +13,6 @@ import cloud.anzaanza.antiagingdna.repository.UserRepository;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.Year;
 import java.util.List;
 import java.util.Map;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -121,7 +120,9 @@ public class AuthService {
     }
 
     private void verifyAge(int birthYear) {
-        int currentYear = Year.now().getValue();
+        // Year.now() 는 JVM 기본 시간대를 따른다. 컨테이너는 UTC 라 연말·연초 9시간 동안
+        // 한국 기준과 연도가 어긋난다 — 가입 가부를 가르는 판정이므로 서비스 시간대로 본다.
+        int currentYear = LocalDate.now(clock).getYear();
         if (birthYear > currentYear) {
             throw new SignUpNotAllowedException("출생연도가 올바르지 않습니다");
         }
@@ -144,6 +145,9 @@ public class AuthService {
      * 나중에 마케팅 동의를 다시 물어야 하는지 판단하려면 그 구분이 필요하다.
      */
     private void saveAgreements(User user, Map<AgreementType, Boolean> agreements) {
+        // 시각(timestamp)은 서비스 시간대가 아니라 시스템 시간대를 쓴다 — JPA 감사 컬럼
+        // (created_at 등)이 그렇게 기록되므로 같은 행의 형제 컬럼끼리 어긋나지 않게 맞춘다.
+        // 날짜(달력 하루)만 Clock 을 따른다. TimeConfig 참고.
         LocalDateTime now = LocalDateTime.now();
         agreements.forEach((type, agreed) -> userAgreementRepository.save(UserAgreement.builder()
                 .user(user)
