@@ -138,6 +138,37 @@ class AuthControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    // ── 실제 전송 형식 ───────────────────────────────────────────
+
+    /**
+     * <b>DTO 를 직렬화해서 되던지지 않고</b> 클라이언트가 보낼 JSON 문자열을 그대로 보낸다.
+     *
+     * <p>2026-08-10 배포에서 가입이 전부 400 이었다. 직렬화 왕복 테스트는 항상 모든 필드를
+     * 채워 보내기 때문에, 필드가 빠졌을 때 Jackson 3 이 원시 타입 {@code boolean} 에 null 을
+     * 넣지 못해 터지는 것을 볼 수 없었다. 손으로 쓴 JSON 만이 그 경로를 지난다.
+     */
+    @Test
+    void 클라이언트가_보내는_JSON_을_그대로_받는다() throws Exception {
+        given(authService.signUp(any(SignUpRequest.class))).willReturn(user());
+
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(SIGNUP_JSON))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty());
+    }
+
+    @Test
+    void 진단_항목이_빠지면_어느_항목인지_알려준다() throws Exception {
+        String missingCheckbox = SIGNUP_JSON.replace("\"sleepDaytimeDrowsy\":true,", "");
+
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(missingCheckbox))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors['diagnosis.sleepDaytimeDrowsy']").isNotEmpty());
+    }
+
     // ── 보호된 엔드포인트 ─────────────────────────────────────────
 
     @Test
@@ -171,6 +202,21 @@ class AuthControllerTest {
     }
 
     // ── 헬퍼 ─────────────────────────────────────────────────────
+
+    /** 목업 STEP 2·3·4 를 채웠을 때 클라이언트가 실제로 보내는 본문 */
+    private static final String SIGNUP_JSON =
+            """
+            {"email":"nosleep@gmail.com","password":"password1234","nickname":"안자안자","birthYear":2002,
+             "diagnosis":{"sleepType":"MORNING",
+              "sleepDaytimeDrowsy":true,"sleepOnsetDelayed":false,
+              "sleepNightAwakening":false,"sleepUnrefreshed":false,
+              "sugarSensitivity":"NONE","caffeineSensitivity":"HIGH","stressSensitivity":"MODERATE",
+              "exerciseLevel":"FROM_150_TO_300","shiftWorker":false,"frequentTraveler":false,
+              "drinkFrequency":"MONTHLY_OR_LESS","smokingStatus":"CURRENT_DAILY",
+              "lifeRhythm":"VERY_REGULAR"},
+             "agreements":{"TERMS_OF_SERVICE":true,"PRIVACY_SENSITIVE":true,
+              "MARKETING":false,"AGE_OVER_14":true}}
+            """;
 
     private static SignUpRequest signUpRequest(String password) {
         Map<AgreementType, Boolean> agreements = new EnumMap<>(AgreementType.class);

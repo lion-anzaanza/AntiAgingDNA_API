@@ -21,19 +21,25 @@ import jakarta.validation.constraints.NotNull;
  *
  * <p>Q11(사회 교류)·Q12(WHO-5) 는 목업에 없어 {@code null} 을 허용한다. 화면이 확정되면
  * 엔티티의 {@code nullable} 과 함께 조인다.
+ *
+ * <p>체크박스 항목이 {@code boolean} 이 아니라 {@code Boolean} + {@code @NotNull} 인 이유 —
+ * 원시 타입이면 필드가 빠졌을 때 Jackson 3 이 역직렬화 단계에서 먼저 터진다
+ * ({@code FAIL_ON_NULL_FOR_PRIMITIVES} 가 기본 활성, Jackson 2 와 반대다). 그러면 어느
+ * 항목이 문제인지 알려주지 못하는 "Failed to read request" 만 남는다. 래퍼로 받으면 검증
+ * 단계까지 도달해 항목별 오류를 돌려줄 수 있고, "체크 안 함"과 "답 안 함"도 구분된다.
  */
 public record DiagnosisRequest(
         @NotNull SleepType sleepType,
-        boolean sleepDaytimeDrowsy,
-        boolean sleepOnsetDelayed,
-        boolean sleepNightAwakening,
-        boolean sleepUnrefreshed,
+        @NotNull Boolean sleepDaytimeDrowsy,
+        @NotNull Boolean sleepOnsetDelayed,
+        @NotNull Boolean sleepNightAwakening,
+        @NotNull Boolean sleepUnrefreshed,
         @NotNull SensitivityLevel sugarSensitivity,
         @NotNull SensitivityLevel caffeineSensitivity,
         @NotNull SensitivityLevel stressSensitivity,
         @NotNull ExerciseLevel exerciseLevel,
-        boolean shiftWorker,
-        boolean frequentTraveler,
+        @NotNull Boolean shiftWorker,
+        @NotNull Boolean frequentTraveler,
         @NotNull DrinkFrequency drinkFrequency,
         @NotNull SmokingStatus smokingStatus,
         @NotNull LifeRhythm lifeRhythm,
