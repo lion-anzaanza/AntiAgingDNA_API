@@ -30,4 +30,15 @@ public interface DailyScoreRepository extends JpaRepository<DailyScore, String> 
     long countByUserIdAndScoreDateLessThanAndSocialScoreIsNotNull(String userId, LocalDate date);
 
     long countByUserIdAndScoreDateLessThanAndEnvironmentScoreIsNotNull(String userId, LocalDate date);
+
+    // ── 재채점 (scoring.version 이 바뀐 뒤) ────────────────────────
+
+    /** 현재 파라미터 버전이 아닌 행이 남아 있는가 — 재채점이 필요한지 판단한다 */
+    boolean existsByUserIdAndScoringVersionNot(String userId, String scoringVersion);
+
+    /**
+     * 재채점은 <b>반드시 날짜 오름차순</b>이어야 한다. 결합값이 앞선 날짜들의 영역 점수
+     * (7일 이동평균 창)에 의존하므로, 뒤에서부터 고치면 아직 옛 값인 이웃을 읽는다.
+     */
+    List<DailyScore> findByUserIdOrderByScoreDateAsc(String userId);
 }

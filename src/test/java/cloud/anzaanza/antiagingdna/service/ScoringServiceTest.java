@@ -7,6 +7,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import cloud.anzaanza.antiagingdna.config.ScoringProperties;
 import cloud.anzaanza.antiagingdna.config.ScoringProperties.Alpha;
@@ -34,6 +37,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -238,6 +242,97 @@ class ScoringServiceTest {
         assertThat(scoringService.scoreOn(USER_ID, TODAY).getDisplayTotal()).isEqualByComparingTo("50.00");
     }
 
+    // ── 재채점 (scoring.version 변경 후) ─────────────────────────
+
+    @Test
+    void 옛_버전_행이_남아_있으면_조회_시점에_다시_만든다() {
+        givenDna();
+        givenSaveReturnsArgument();
+        given(dailyScoreRepository.existsByUserIdAndScoringVersionNot(USER_ID, "test-v1"))
+                .willReturn(true);
+        given(dailyScoreRepository.findByUserIdOrderByScoreDateAsc(USER_ID))
+                .willReturn(List.of(
+                        oldVersionScore(TODAY.minusDays(2)),
+                        oldVersionScore(TODAY.minusDays(1)),
+                        oldVersionScore(TODAY)));
+        given(diaryRepository.findByAuthorIdAndLogDate(anyString(), any())).willReturn(Optional.empty());
+        given(dailyScoreRepository.findByUserIdAndScoreDateBetweenOrderByScoreDateAsc(
+                        anyString(), any(), any()))
+                .willReturn(List.of());
+        given(dailyScoreRepository.findByUserIdAndScoreDate(anyString(), any()))
+                .willAnswer(call -> Optional.of(oldVersionScore(call.getArgument(1))));
+
+        scoringService.scoreOn(USER_ID, TODAY);
+
+        // 3일치가 전부 현재 버전으로 다시 저장된다
+        ArgumentCaptor<DailyScore> saved = ArgumentCaptor.forClass(DailyScore.class);
+        verify(dailyScoreRepository, times(3)).save(saved.capture());
+        assertThat(saved.getAllValues())
+                .allSatisfy(score -> assertThat(score.getScoringVersion()).isEqualTo("test-v1"));
+    }
+
+    /**
+     * 결합값이 앞선 6일의 영역 점수를 평균하므로, 뒤에서부터 고치면 아직 옛 파라미터로 계산된
+     * 이웃을 읽는다. 오름차순은 취향이 아니라 정확성 요건이다.
+     */
+    @Test
+    void 재채점은_날짜_오름차순으로_진행된다() {
+        givenDna();
+        givenSaveReturnsArgument();
+        given(dailyScoreRepository.findByUserIdOrderByScoreDateAsc(USER_ID))
+                .willReturn(List.of(
+                        oldVersionScore(TODAY.minusDays(2)),
+                        oldVersionScore(TODAY.minusDays(1)),
+                        oldVersionScore(TODAY)));
+        given(diaryRepository.findByAuthorIdAndLogDate(anyString(), any())).willReturn(Optional.empty());
+        given(dailyScoreRepository.findByUserIdAndScoreDateBetweenOrderByScoreDateAsc(
+                        anyString(), any(), any()))
+                .willReturn(List.of());
+
+        assertThat(scoringService.rescore(USER_ID)).isEqualTo(3);
+
+        ArgumentCaptor<DailyScore> saved = ArgumentCaptor.forClass(DailyScore.class);
+        verify(dailyScoreRepository, times(3)).save(saved.capture());
+        assertThat(saved.getAllValues())
+                .extracting(DailyScore::getScoreDate)
+                .containsExactly(TODAY.minusDays(2), TODAY.minusDays(1), TODAY);
+    }
+
+    @Test
+    void 버전이_같으면_재채점하지_않는다() {
+        given(dailyScoreRepository.existsByUserIdAndScoringVersionNot(USER_ID, "test-v1"))
+                .willReturn(false);
+        given(dailyScoreRepository.findByUserIdAndScoreDate(USER_ID, TODAY))
+                .willReturn(Optional.of(previousScore(TODAY, "50.00")));
+
+        scoringService.scoreOn(USER_ID, TODAY);
+
+        verify(dailyScoreRepository, never()).findByUserIdOrderByScoreDateAsc(anyString());
+        verify(dailyScoreRepository, never()).save(any(DailyScore.class));
+    }
+
+    @Test
+    void 재채점은_기존_행을_덮어쓴다() {
+        givenDna();
+        givenSaveReturnsArgument();
+        given(dailyScoreRepository.findByUserIdOrderByScoreDateAsc(USER_ID))
+                .willReturn(List.of(oldVersionScore(TODAY)));
+        given(diaryRepository.findByAuthorIdAndLogDate(anyString(), any())).willReturn(Optional.empty());
+        given(dailyScoreRepository.findByUserIdAndScoreDateBetweenOrderByScoreDateAsc(
+                        anyString(), any(), any()))
+                .willReturn(List.of());
+        given(dailyScoreRepository.findByUserIdAndScoreDate(USER_ID, TODAY))
+                .willReturn(Optional.of(oldVersionScore(TODAY)));
+
+        scoringService.rescore(USER_ID);
+
+        ArgumentCaptor<DailyScore> saved = ArgumentCaptor.forClass(DailyScore.class);
+        verify(dailyScoreRepository).save(saved.capture());
+        assertThat(saved.getValue().getId())
+                .describedAs("행을 새로 만들면 하루 1행 제약에 걸린다")
+                .isEqualTo("existing-score");
+    }
+
     @Test
     void 초기_진단이_없으면_404_로_떨어진다() {
         given(dnaInfoRepository.findById(USER_ID)).willReturn(Optional.empty());
@@ -257,6 +352,17 @@ class ScoringServiceTest {
                 .sleepStartedAt(LocalTime.of(23, 0))
                 .sleepEndedAt(LocalTime.of(7, 0)) // 8h → 100
                 .sleepLatency(SleepLatency.WITHIN_15) // 75
+                .build();
+    }
+
+    /** 파라미터가 바뀌기 전 버전으로 저장돼 있던 행 */
+    private static DailyScore oldVersionScore(LocalDate date) {
+        return DailyScore.builder()
+                .id("existing-score")
+                .user(USER)
+                .scoreDate(date)
+                .displayTotal(new BigDecimal("50.00"))
+                .scoringVersion("test-v0")
                 .build();
     }
 

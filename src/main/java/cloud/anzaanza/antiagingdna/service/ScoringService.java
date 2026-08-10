@@ -119,15 +119,66 @@ public class ScoringService {
      */
     @Transactional
     public DailyScore scoreOn(String userId, LocalDate date) {
+        rescoreIfStale(userId);
         return dailyScoreRepository
                 .findByUserIdAndScoreDate(userId, date)
                 .orElseGet(() -> recalculate(userId, date));
     }
 
     /** 구간 조회. 비어 있는 날짜는 채우지 않는다 — 추이 그래프는 기록이 있는 날만 그리면 된다 */
-    @Transactional(readOnly = true)
+    @Transactional
     public List<DailyScore> scoresBetween(String userId, LocalDate from, LocalDate to) {
+        rescoreIfStale(userId);
         return dailyScoreRepository.findByUserIdAndScoreDateBetweenOrderByScoreDateAsc(userId, from, to);
+    }
+
+    /**
+     * 파라미터 버전이 바뀐 뒤 남아 있는 옛 점수를 다시 만든다.
+     *
+     * <p>배치나 관리자 기능을 두지 않고 <b>조회 시점에</b> 처리한다. 이유:
+     * <ul>
+     *   <li>{@code daily_score} 는 파생 캐시라 언제 다시 만들어도 결과가 같다. 이미 같은 이유로
+     *       read-through 를 쓰고 있으므로 새로운 종류의 동작이 아니다.</li>
+     *   <li>부팅 시 일괄 처리는 전체 사용자 수에 비례해 부팅을 막고, 컨테이너를 재시작할 때마다
+     *       다시 판단해야 한다.</li>
+     *   <li>관리자 엔드포인트는 이 프로젝트에 없는 권한 체계를 새로 만들어야 한다.</li>
+     * </ul>
+     *
+     * <p>사용자 한 명당 파라미터 변경 1회에 한 번만 실행되고, 범위는 그 사람의 가입 이후
+     * 점수 행 수로 한정된다.
+     */
+    private void rescoreIfStale(String userId) {
+        if (dailyScoreRepository.existsByUserIdAndScoringVersionNot(userId, properties.version())) {
+            rescore(userId);
+        }
+    }
+
+    /**
+     * 사용자 한 명의 점수 이력을 현재 파라미터로 전부 다시 만든다.
+     *
+     * <p><b>날짜 오름차순으로 도는 것이 정확성 요건이다.</b> 결합값
+     * {@code C_c(t) = (1−α)·baseline + α·mean7} 의 {@code mean7} 이 앞선 6일의 영역 점수를
+     * 읽으므로, 뒤에서부터 고치면 아직 옛 파라미터로 계산된 이웃을 평균에 넣는다.
+     * {@code α(n)} 의 n 도 {@code scoreDate < date} 조건이라 같은 방향에 의존한다.
+     *
+     * <p>원본({@code dna_info} + {@code diary})은 건드리지 않는다. 몇 번을 돌려도 같은 결과다.
+     *
+     * @return 다시 만든 행 수
+     */
+    @Transactional
+    public int rescore(String userId) {
+        DnaInfo dna = dnaInfoRepository
+                .findById(userId)
+                .orElseThrow(() -> new DiagnosisNotFoundException(userId));
+
+        List<LocalDate> dates = dailyScoreRepository.findByUserIdOrderByScoreDateAsc(userId).stream()
+                .map(DailyScore::getScoreDate)
+                .toList();
+
+        for (LocalDate date : dates) {
+            recalculate(dna, date);
+        }
+        return dates.size();
     }
 
     /**
