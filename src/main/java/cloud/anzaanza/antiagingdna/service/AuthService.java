@@ -6,6 +6,7 @@ import cloud.anzaanza.antiagingdna.entity.User;
 import cloud.anzaanza.antiagingdna.entity.UserAgreement;
 import cloud.anzaanza.antiagingdna.entity.enums.AgreementType;
 import cloud.anzaanza.antiagingdna.exception.EmailAlreadyUsedException;
+import cloud.anzaanza.antiagingdna.exception.LoginIdAlreadyUsedException;
 import cloud.anzaanza.antiagingdna.exception.SignUpNotAllowedException;
 import cloud.anzaanza.antiagingdna.repository.DnaInfoRepository;
 import cloud.anzaanza.antiagingdna.repository.UserAgreementRepository;
@@ -71,11 +72,15 @@ public class AuthService {
     public User signUp(SignUpRequest request) {
         verifyAge(request.birthYear());
         verifyRequiredAgreements(request.agreements());
+        if (userRepository.existsByLoginId(request.loginId())) {
+            throw new LoginIdAlreadyUsedException(request.loginId());
+        }
         if (userRepository.existsByEmail(request.email())) {
             throw new EmailAlreadyUsedException(request.email());
         }
 
         User user = userRepository.save(User.builder()
+                .loginId(request.loginId())
                 .email(request.email())
                 .password(passwordEncoder.encode(request.password()))
                 .nickname(request.nickname())
@@ -92,18 +97,18 @@ public class AuthService {
     }
 
     /**
-     * 이메일이 없는 경우와 비밀번호가 틀린 경우를 구분해서 알려주지 않는다 — 구분하면 로그인
+     * 아이디가 없는 경우와 비밀번호가 틀린 경우를 구분해서 알려주지 않는다 — 구분하면 로그인
      * 화면이 가입 여부 조회 API 가 된다.
      */
     @Transactional(readOnly = true)
-    public User authenticate(String email, String rawPassword) {
-        User user = userRepository.findByEmail(email).orElse(null);
+    public User authenticate(String loginId, String rawPassword) {
+        User user = userRepository.findByLoginId(loginId).orElse(null);
         if (user == null) {
             passwordEncoder.matches(rawPassword, dummyPasswordHash);
-            throw new BadCredentialsException("이메일 또는 비밀번호가 올바르지 않습니다");
+            throw new BadCredentialsException("아이디 또는 비밀번호가 올바르지 않습니다");
         }
         if (!passwordEncoder.matches(rawPassword, user.getPassword())) {
-            throw new BadCredentialsException("이메일 또는 비밀번호가 올바르지 않습니다");
+            throw new BadCredentialsException("아이디 또는 비밀번호가 올바르지 않습니다");
         }
         return user;
     }

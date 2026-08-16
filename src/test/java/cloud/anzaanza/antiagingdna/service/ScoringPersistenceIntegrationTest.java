@@ -70,13 +70,21 @@ class ScoringPersistenceIntegrationTest extends IntegrationTest {
     }
 
     private User newUser() {
-        String email = "it-" + SEQUENCE.incrementAndGet() + "-" + System.nanoTime() + "@example.com";
+        String suffix = SEQUENCE.incrementAndGet() + "-" + System.nanoTime();
+        String loginId = "it" + suffix.replace("-", "");
+        String email = "it-" + suffix + "@example.com";
         Map<AgreementType, Boolean> agreements = new EnumMap<>(AgreementType.class);
         for (AgreementType type : AgreementType.values()) {
             agreements.put(type, true);
         }
         return authService.signUp(new SignUpRequest(
-                email, "password1234", "통합테스트", 2000, diagnosis(), agreements));
+                loginId.substring(0, Math.min(loginId.length(), 32)),
+                email,
+                "password1234",
+                "통합테스트",
+                2000,
+                diagnosis(),
+                agreements));
     }
 
     // ── 가입 ─────────────────────────────────────────────────────

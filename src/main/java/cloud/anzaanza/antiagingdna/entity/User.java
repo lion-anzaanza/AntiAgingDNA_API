@@ -15,14 +15,21 @@ import org.hibernate.annotations.UuidGenerator;
 /**
  * 사용자 계정. 회원가입 STEP 2(개인정보 입력) 에 대응한다.
  *
- * <p>로그인 식별자는 <b>이메일</b>이다 — 목업 STEP 2 에 별도 로그인 아이디 입력이 없다.
+ * <p>로그인 식별자는 <b>아이디({@link #loginId})</b>다(기획 결정, 2026-08-16 — FE
+ * backend-backlog.md #2). 이메일은 계정에 남아있지만 로그인에는 쓰지 않는다 — 비밀번호 찾기
+ * 등 복구 수단으로 필요해서다. {@code login_id} 는 기존 행을 백필하기 전까지 nullable 이다
+ * (V2 마이그레이션 참고) — 신규 가입은 {@link cloud.anzaanza.antiagingdna.dto.SignUpRequest}
+ * 의 {@code @NotBlank} 가 필수로 강제한다.
  *
  * <p>STEP 4 의 약관 동의는 {@link UserAgreement} 가 항목별로 보관한다.
  */
 @Entity
 @Table(
         name = "user",
-        uniqueConstraints = @UniqueConstraint(name = "uk_user_email", columnNames = "email"))
+        uniqueConstraints = {
+            @UniqueConstraint(name = "uk_user_email", columnNames = "email"),
+            @UniqueConstraint(name = "uk_user_login_id", columnNames = "login_id")
+        })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
@@ -34,7 +41,11 @@ public class User extends BaseTimeEntity {
     @Column(name = "id", length = 64)
     private String id;
 
-    /** 로그인 식별자 */
+    /** 로그인 식별자(아이디). 기존 행 백필 전까지는 nullable — {@link #email} 위 Javadoc 참고 */
+    @Column(name = "login_id", length = 32)
+    private String loginId;
+
+    /** 복구용 연락처. 더 이상 로그인 식별자가 아니다 */
     @Column(name = "email", length = 255, nullable = false)
     private String email;
 

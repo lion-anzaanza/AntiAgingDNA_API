@@ -45,7 +45,7 @@ public class AuthController {
 
     @PostMapping("/login")
     public TokenResponse login(@Valid @RequestBody LoginRequest request) {
-        return issueFor(authService.authenticate(request.email(), request.password()));
+        return issueFor(authService.authenticate(request.loginId(), request.password()));
     }
 
     /** 토큰이 누구 것인지 확인한다. 클라이언트가 앱 시작 시 세션 복원에 쓴다. */

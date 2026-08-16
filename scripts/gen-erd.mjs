@@ -60,7 +60,8 @@ const tables = [
     x: 80,
     y: 80,
     rows: [
-      ['아이디', 'id', 'VARCHAR(64)', 'PK'],
+      ['고유ID', 'id', 'VARCHAR(64)', 'PK'],
+      ['로그인ID', 'login_id', 'VARCHAR(32)', 'UQ'],
       ['이메일', 'email', 'VARCHAR(255)', 'UQ, NN'],
       ['비밀번호', 'password', 'VARCHAR(255)', 'NN'],
       ['닉네임', 'nickname', 'VARCHAR(32)', 'NN'],
@@ -182,9 +183,11 @@ const edges = [
     from: 'user',
     to: 'user_agreement',
     cardinality: '1:N',
-    exit: [1, 0.5],
+    // user 테이블이 login_id 행 추가로 8행(270px)이 됐다 — 0.5 는 더 이상 10배수 y 가 아니라
+    // 130/270 으로 명시 (y=210).
+    exit: [1, 130 / 270],
     entry: [0, 0.5],
-    points: [[1000, 200], [1000, 170]],
+    points: [[1000, 210], [1000, 170]],
   },
   { from: 'user', to: 'dna_info', cardinality: '1:1', exit: [0.2, 1], entry: [0.2, 0], points: [] },
   {
