@@ -107,7 +107,11 @@ class ScoringPersistenceIntegrationTest extends IntegrationTest {
 
     /**
      * 기획 §B-3 워크드 예시를 실제 DB 왕복으로 재현한다.
-     * 신체 67.31 · 정신 66.98 · 사회 60.00 (감정은 '기분 회복 활동' 앵커 미정이라 스트레스 단일 소스)
+     * 신체 67.31 · 정신 66.17 · 사회 60.00 (감정은 '기분 회복 활동' 앵커 미정이라 스트레스 단일 소스)
+     *
+     * <p>정신 영역은 원래 기획 §B-3 예시값(67.0, 스트레스 1~10 도메인 기준)과 거의 일치하는
+     * 66.98이었으나, stressLevel 도메인을 0~10으로 확장(2026-08-17, A-6 결정)하면서 같은
+     * 입력(6)의 스트레스 원점수가 44.44→40.0으로 바뀌어 66.17로 이동했다.
      */
     @Test
     void 기획_B3_예시가_DB_왕복_뒤에도_그대로_재현된다() {
@@ -121,7 +125,7 @@ class ScoringPersistenceIntegrationTest extends IntegrationTest {
                 .orElseThrow();
 
         assertThat(score.getPhysicalScore()).isEqualByComparingTo("67.31");
-        assertThat(score.getMentalScore()).isEqualByComparingTo("66.98");
+        assertThat(score.getMentalScore()).isEqualByComparingTo("66.17");
         assertThat(score.getSocialScore()).isEqualByComparingTo("60.00");
         assertThat(score.getEnvironmentScore()).describedAs("환경은 입력이 없어 결측").isNull();
     }
@@ -238,7 +242,7 @@ class ScoringPersistenceIntegrationTest extends IntegrationTest {
                 WaterIntake.SIX_TO_SEVEN, // 85
                 true, ExerciseDuration.ABOUT_30, ExerciseType.AEROBIC, // 55
                 SittingHours.EIGHT_TO_TEN, // 45
-                6, // 스트레스 → 44.44 → k1.1 → 38.89
+                6, // 스트레스 → 40.0 → k1.1 → 34.0
                 null,
                 SocialContact.BRIEF, // 60
                 3, null, null);
