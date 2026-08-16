@@ -67,7 +67,8 @@ public class AuthController {
     @GetMapping("/me")
     @SecurityRequirement(name = "bearerAuth")
     public UserResponse me(@AuthenticationPrincipal Jwt jwt) {
-        return UserResponse.from(authService.findById(jwt.getSubject()));
+        User user = authService.findById(jwt.getSubject());
+        return UserResponse.from(user, authService.currentStreak(user.getId()));
     }
 
     /**
@@ -110,6 +111,7 @@ public class AuthController {
 
     private TokenResponse issueFor(User user) {
         TokenService.IssuedToken token = tokenService.issue(user);
-        return TokenResponse.bearer(token.value(), token.expiresIn(), UserResponse.from(user));
+        UserResponse userResponse = UserResponse.from(user, authService.currentStreak(user.getId()));
+        return TokenResponse.bearer(token.value(), token.expiresIn(), userResponse);
     }
 }

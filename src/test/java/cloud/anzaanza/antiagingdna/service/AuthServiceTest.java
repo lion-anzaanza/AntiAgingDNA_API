@@ -266,6 +266,46 @@ class AuthServiceTest {
         assertThat(authService.loginIdExists(LOGIN_ID)).isFalse();
     }
 
+    // ── 연속 기록일 ──────────────────────────────────────────────
+    // clock 은 2026-08-10(KST) 로 고정돼 있다.
+
+    @Test
+    void 오늘까지_연속으로_기록했으면_오늘을_포함해_센다() {
+        given(diaryRepository.existsByAuthorIdAndLogDate("user-1", LocalDate.of(2026, 8, 10)))
+                .willReturn(true);
+        given(diaryRepository.existsByAuthorIdAndLogDate("user-1", LocalDate.of(2026, 8, 9)))
+                .willReturn(true);
+        given(diaryRepository.existsByAuthorIdAndLogDate("user-1", LocalDate.of(2026, 8, 8)))
+                .willReturn(true);
+        given(diaryRepository.existsByAuthorIdAndLogDate("user-1", LocalDate.of(2026, 8, 7)))
+                .willReturn(false);
+
+        assertThat(authService.currentStreak("user-1")).isEqualTo(3);
+    }
+
+    /** 오늘치를 아직 안 썼어도, 어제까지 이어져 있으면 스트릭이 끊긴 게 아니다(하루가 안 끝났으므로) */
+    @Test
+    void 오늘_미기록이어도_어제까지_연속이면_스트릭이_유지된다() {
+        given(diaryRepository.existsByAuthorIdAndLogDate("user-1", LocalDate.of(2026, 8, 10)))
+                .willReturn(false);
+        given(diaryRepository.existsByAuthorIdAndLogDate("user-1", LocalDate.of(2026, 8, 9)))
+                .willReturn(true);
+        given(diaryRepository.existsByAuthorIdAndLogDate("user-1", LocalDate.of(2026, 8, 8)))
+                .willReturn(true);
+        given(diaryRepository.existsByAuthorIdAndLogDate("user-1", LocalDate.of(2026, 8, 7)))
+                .willReturn(false);
+
+        assertThat(authService.currentStreak("user-1")).isEqualTo(2);
+    }
+
+    @Test
+    void 오늘도_어제도_기록이_없으면_스트릭은_0이다() {
+        given(diaryRepository.existsByAuthorIdAndLogDate(eq("user-1"), any(LocalDate.class)))
+                .willReturn(false);
+
+        assertThat(authService.currentStreak("user-1")).isZero();
+    }
+
     // ── 헬퍼 ─────────────────────────────────────────────────────
 
     private void givenSaveReturnsArgument() {

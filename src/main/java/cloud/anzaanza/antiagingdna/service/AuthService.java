@@ -154,6 +154,30 @@ public class AuthService {
         userRepository.deleteById(userId);
     }
 
+    /**
+     * 연속 기록일 — 마이페이지 프로필 카드 "연속 기록 N일째"(FE backend-backlog.md #24, #28).
+     * FE 가 제안한 정의를 그대로 쓴다: 오늘 날짜부터 거슬러 올라가며, 오늘치가 아직 없으면
+     * 어제부터 세기 시작한다(하루가 아직 끝나지 않았다고 보고 그날의 미기록으로 스트릭을
+     * 끊지 않는다). 빈 날을 만나면 즉시 멈춘다.
+     *
+     * <p>전 기간을 한 번에 훑는 대신 날짜를 하나씩 거슬러 올라가며 존재 여부만 묻는다 —
+     * FE 가 우려한 "전 기간 조회는 비싸진다"는 그래서 해당하지 않는다: 실제 걸리는 조회
+     * 횟수는 스트릭 길이(끊긴 지점까지)에 비례하지, 계정 나이에 비례하지 않는다.
+     */
+    @Transactional(readOnly = true)
+    public long currentStreak(String userId) {
+        LocalDate date = LocalDate.now(clock);
+        if (!diaryRepository.existsByAuthorIdAndLogDate(userId, date)) {
+            date = date.minusDays(1);
+        }
+        long streak = 0;
+        while (diaryRepository.existsByAuthorIdAndLogDate(userId, date)) {
+            streak++;
+            date = date.minusDays(1);
+        }
+        return streak;
+    }
+
     /** 가입 폼에서 미리 확인하는 용도(FE backend-backlog.md #14) — 인증 불필요, 공개 엔드포인트 */
     @Transactional(readOnly = true)
     public boolean emailExists(String email) {
