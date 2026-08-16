@@ -28,7 +28,10 @@ import java.util.Map;
  *     찍으므로 보낼 필요 없다.
  */
 public record SignUpRequest(
-        @NotBlank @Size(min = 4, max = 32) @Pattern(regexp = "^[A-Za-z0-9_]+$") String loginId,
+        @NotBlank
+                @Size(min = LOGIN_ID_MIN, max = LOGIN_ID_MAX)
+                @Pattern(regexp = LOGIN_ID_PATTERN)
+                String loginId,
         @NotBlank @Email @Size(max = 255) String email,
 
         // 상한 72 는 취향이 아니다. BCrypt 는 입력의 앞 72바이트만 쓰므로 그 뒤는 검증에
@@ -55,4 +58,11 @@ public record SignUpRequest(
                         example =
                                 "{\"TERMS_OF_SERVICE\": true, \"PRIVACY_SENSITIVE\": true, "
                                         + "\"MARKETING\": false, \"AGE_OVER_14\": true}")
-                Map<AgreementType, Boolean> agreements) {}
+                Map<AgreementType, Boolean> agreements) {
+
+    // 아이디 형식 상수 — 가입 검증과 중복 확인(AuthController#checkLoginId)이 같은 규칙을
+    // 쓰게 여기 하나만 둔다. 잠정 규칙이라는 사정은 위 Javadoc 참고.
+    public static final int LOGIN_ID_MIN = 4;
+    public static final int LOGIN_ID_MAX = 32;
+    public static final String LOGIN_ID_PATTERN = "^[A-Za-z0-9_]+$";
+}

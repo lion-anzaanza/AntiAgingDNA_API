@@ -5,8 +5,11 @@ import cloud.anzaanza.antiagingdna.exception.DiaryNotFoundException;
 import cloud.anzaanza.antiagingdna.exception.EmailAlreadyUsedException;
 import cloud.anzaanza.antiagingdna.exception.LoginIdAlreadyUsedException;
 import cloud.anzaanza.antiagingdna.exception.SignUpNotAllowedException;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -67,6 +70,35 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(BadCredentialsException.class)
     public ProblemDetail handleBadCredentials(BadCredentialsException e) {
         return problem(HttpStatus.UNAUTHORIZED, "인증 실패", e.getMessage());
+    }
+
+    /**
+     * DB 제약 위반이 그대로 새면 스택트레이스가 담긴 500 이 나간다. 이 프로젝트에 아직
+     * 명시적인 낙관적 락이 없어, 동시 요청이 FK/유니크 제약과 충돌하는 경로(예: 회원탈퇴
+     * 도중 다른 요청이 같은 계정으로 쓰기)를 여기서 걸러 일관된 형식으로 낸다.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ProblemDetail handleDataIntegrityViolation(DataIntegrityViolationException e) {
+        return problem(HttpStatus.CONFLICT, "요청을 처리할 수 없음", "다른 요청과 충돌했습니다. 다시 시도해주세요");
+    }
+
+    /**
+     * {@code @RequestParam}/{@code @PathVariable} 제약(예: {@code checkEmail(@Email ...)})
+     * 위반은 {@link MethodArgumentNotValidException} 이 아니라 이걸로 온다 — 컨트롤러가
+     * {@code @Validated} 로 감싼 메서드 인자에 붙는 경로라 바인딩 단계가 다르다. 형식은
+     * {@link #handleMethodArgumentNotValid} 와 맞춘다.
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ProblemDetail handleConstraintViolation(ConstraintViolationException e) {
+        Map<String, String> errors = new LinkedHashMap<>();
+        for (ConstraintViolation<?> violation : e.getConstraintViolations()) {
+            String path = violation.getPropertyPath().toString();
+            String field = path.contains(".") ? path.substring(path.lastIndexOf('.') + 1) : path;
+            errors.putIfAbsent(field, violation.getMessage());
+        }
+        ProblemDetail problem = problem(HttpStatus.BAD_REQUEST, "입력값 오류", "요청 값이 올바르지 않습니다");
+        problem.setProperty("errors", errors);
+        return problem;
     }
 
     /** 필드 단위 위반은 {@code errors} 확장 속성에 담는다 — 화면이 입력칸 옆에 붙일 수 있도록 */

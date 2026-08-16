@@ -36,6 +36,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.test.context.TestPropertySource;
@@ -234,6 +235,34 @@ class AuthControllerTest {
         mockMvc.perform(get("/api/auth/check-login-id").param("loginId", "nosleep_dev"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.available").value(true));
+    }
+
+    /**
+     * 형식이 가입 검증을 통과 못 할 값은 중복 확인 단계에서부터 400 이어야 한다 — 안 그러면
+     * "사용 가능"으로 보였다가 실제 가입 제출에서 400 이 나는 모순이 생긴다.
+     */
+    @Test
+    void 이메일_형식이_잘못되면_중복_확인도_400_이다() throws Exception {
+        mockMvc.perform(get("/api/auth/check-email").param("email", "not-an-email"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void 아이디_형식이_잘못되면_중복_확인도_400_이다() throws Exception {
+        mockMvc.perform(get("/api/auth/check-login-id").param("loginId", "a"))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** 회원탈퇴 중 동시 쓰기가 FK/유니크 제약과 충돌하면 스택트레이스 500 이 아니라 409 여야 한다 */
+    @Test
+    void 탈퇴_중_DB_제약_충돌은_409_다() throws Exception {
+        willThrow(new DataIntegrityViolationException("constraint violation"))
+                .given(authService)
+                .withdraw(anyString());
+        String token = tokenService.issue(user()).value();
+
+        mockMvc.perform(delete("/api/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isConflict());
     }
 
     // ── 헬퍼 ─────────────────────────────────────────────────────

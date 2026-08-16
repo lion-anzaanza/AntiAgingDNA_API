@@ -139,6 +139,10 @@ public class AuthService {
      *
      * <p>FK 참조 방향의 역순으로 지운다: user_agreement/diary/daily_score(전부 user.id 를
      * FK 로 참조) → dna_info(user 와 PK 공유) → user. 순서를 바꾸면 FK 제약 위반으로 실패한다.
+     *
+     * <p><b>사용자 소유 테이블을 새로 추가하면 여기 삭제 순서에도 추가해야 한다</b> — DB
+     * cascade 가 아니라 이 메서드가 유일한 삭제 경로다. 잊으면 FK 오류로 걸리지 않고(뒤에
+     * 생긴 테이블은 삭제 시점에 아직 없어 조용히 넘어간다) 데이터만 고아로 남는다.
      */
     @Transactional
     public void withdraw(String userId) {
