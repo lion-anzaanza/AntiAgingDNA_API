@@ -11,4 +11,7 @@ public interface UserAgreementRepository extends JpaRepository<UserAgreement, St
     List<UserAgreement> findByUserId(String userId);
 
     Optional<UserAgreement> findByUserIdAndAgreementType(String userId, AgreementType agreementType);
+
+    /** 회원탈퇴 시 계정보다 먼저 지운다 (FK: user_agreement.user_id → user.id) */
+    void deleteByUserId(String userId);
 }

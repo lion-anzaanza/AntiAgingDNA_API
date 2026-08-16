@@ -8,6 +8,8 @@ import cloud.anzaanza.antiagingdna.entity.enums.AgreementType;
 import cloud.anzaanza.antiagingdna.exception.EmailAlreadyUsedException;
 import cloud.anzaanza.antiagingdna.exception.LoginIdAlreadyUsedException;
 import cloud.anzaanza.antiagingdna.exception.SignUpNotAllowedException;
+import cloud.anzaanza.antiagingdna.repository.DailyScoreRepository;
+import cloud.anzaanza.antiagingdna.repository.DiaryRepository;
 import cloud.anzaanza.antiagingdna.repository.DnaInfoRepository;
 import cloud.anzaanza.antiagingdna.repository.UserAgreementRepository;
 import cloud.anzaanza.antiagingdna.repository.UserRepository;
@@ -43,6 +45,8 @@ public class AuthService {
     private final UserRepository userRepository;
     private final UserAgreementRepository userAgreementRepository;
     private final DnaInfoRepository dnaInfoRepository;
+    private final DiaryRepository diaryRepository;
+    private final DailyScoreRepository dailyScoreRepository;
     private final PasswordEncoder passwordEncoder;
     private final ScoringService scoringService;
     private final Clock clock;
@@ -52,12 +56,16 @@ public class AuthService {
             UserRepository userRepository,
             UserAgreementRepository userAgreementRepository,
             DnaInfoRepository dnaInfoRepository,
+            DiaryRepository diaryRepository,
+            DailyScoreRepository dailyScoreRepository,
             PasswordEncoder passwordEncoder,
             ScoringService scoringService,
             Clock clock) {
         this.userRepository = userRepository;
         this.userAgreementRepository = userAgreementRepository;
         this.dnaInfoRepository = dnaInfoRepository;
+        this.diaryRepository = diaryRepository;
+        this.dailyScoreRepository = dailyScoreRepository;
         this.passwordEncoder = passwordEncoder;
         this.scoringService = scoringService;
         this.clock = clock;
@@ -122,6 +130,40 @@ public class AuthService {
         return userRepository
                 .findById(userId)
                 .orElseThrow(() -> new BadCredentialsException("존재하지 않는 계정입니다"));
+    }
+
+    /**
+     * 회원탈퇴 — 계정과 연관 데이터를 전부 지운다(개인정보보호법상 삭제 요청, FE
+     * backend-backlog.md #24). 소프트 삭제가 아니라 실제 삭제다 — 이 프로젝트에 소프트
+     * 삭제 인프라(deleted_at 등)가 없고, "탈퇴"의 통상적 의미가 그것이다.
+     *
+     * <p>FK 참조 방향의 역순으로 지운다: user_agreement/diary/daily_score(전부 user.id 를
+     * FK 로 참조) → dna_info(user 와 PK 공유) → user. 순서를 바꾸면 FK 제약 위반으로 실패한다.
+     *
+     * <p><b>사용자 소유 테이블을 새로 추가하면 여기 삭제 순서에도 추가해야 한다</b> — DB
+     * cascade 가 아니라 이 메서드가 유일한 삭제 경로다. 잊으면 FK 오류로 걸리지 않고(뒤에
+     * 생긴 테이블은 삭제 시점에 아직 없어 조용히 넘어간다) 데이터만 고아로 남는다.
+     */
+    @Transactional
+    public void withdraw(String userId) {
+        findById(userId); // 존재하지 않는 계정이면 401 로 떨어진다(findById 의 기존 규약)
+        userAgreementRepository.deleteByUserId(userId);
+        diaryRepository.deleteByAuthorId(userId);
+        dailyScoreRepository.deleteByUserId(userId);
+        dnaInfoRepository.deleteById(userId);
+        userRepository.deleteById(userId);
+    }
+
+    /** 가입 폼에서 미리 확인하는 용도(FE backend-backlog.md #14) — 인증 불필요, 공개 엔드포인트 */
+    @Transactional(readOnly = true)
+    public boolean emailExists(String email) {
+        return userRepository.existsByEmail(email);
+    }
+
+    /** 가입 폼에서 미리 확인하는 용도(FE backend-backlog.md #14) — 인증 불필요, 공개 엔드포인트 */
+    @Transactional(readOnly = true)
+    public boolean loginIdExists(String loginId) {
+        return userRepository.existsByLoginId(loginId);
     }
 
     private void verifyAge(int birthYear) {

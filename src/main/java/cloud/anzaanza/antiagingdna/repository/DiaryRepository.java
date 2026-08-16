@@ -15,4 +15,7 @@ public interface DiaryRepository extends JpaRepository<Diary, String> {
             String authorId, LocalDate from, LocalDate to);
 
     boolean existsByAuthorIdAndLogDate(String authorId, LocalDate logDate);
+
+    /** 회원탈퇴 시 계정보다 먼저 지운다 (FK: diary.author_id → user.id) */
+    void deleteByAuthorId(String authorId);
 }

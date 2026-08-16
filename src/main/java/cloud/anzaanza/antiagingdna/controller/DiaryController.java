@@ -3,6 +3,7 @@ package cloud.anzaanza.antiagingdna.controller;
 import cloud.anzaanza.antiagingdna.dto.DiaryRequest;
 import cloud.anzaanza.antiagingdna.dto.DiaryResponse;
 import cloud.anzaanza.antiagingdna.service.DiaryService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import java.time.Clock;
@@ -51,6 +52,10 @@ public class DiaryController {
      * <p>{@code POST} 가 아닌 이유는 하루 1건 제약 때문이다. 자원의 주소가
      * {@code /api/diaries/{date}} 로 이미 정해져 있으므로 {@code PUT} 이 맞다.
      */
+    @Operation(
+            summary = "일지 작성·수정",
+            description = "같은 날짜에 다시 보내면 통째로 교체된다(PATCH 아님 — 빠진 필드는 지워짐). "
+                    + "미래 날짜는 400.")
     @PutMapping("/{date}")
     public DiaryResponse save(
             @AuthenticationPrincipal Jwt jwt,
@@ -61,6 +66,7 @@ public class DiaryController {
         return DiaryResponse.from(diaryService.save(jwt.getSubject(), date, request));
     }
 
+    @Operation(summary = "일지 단건 조회", description = "그 날짜에 기록이 없으면 404.")
     @GetMapping("/{date}")
     public DiaryResponse get(
             @AuthenticationPrincipal Jwt jwt,
@@ -69,6 +75,10 @@ public class DiaryController {
         return DiaryResponse.from(diaryService.get(jwt.getSubject(), date));
     }
 
+    @Operation(
+            summary = "일지 구간 조회",
+            description = "기록이 없는 날짜는 채우지 않는다(응답 배열에 있는 날짜만 기록이 있는 날). "
+                    + "최대 366일.")
     @GetMapping
     public List<DiaryResponse> between(
             @AuthenticationPrincipal Jwt jwt,
@@ -87,6 +97,7 @@ public class DiaryController {
                 .toList();
     }
 
+    @Operation(summary = "일지 삭제", description = "삭제해도 그날의 점수는 baseline 으로 다시 산출된다.")
     @DeleteMapping("/{date}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(

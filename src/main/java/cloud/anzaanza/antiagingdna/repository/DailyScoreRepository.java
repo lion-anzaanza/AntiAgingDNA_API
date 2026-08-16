@@ -48,4 +48,7 @@ public interface DailyScoreRepository extends JpaRepository<DailyScore, String> 
      */
     List<DailyScore> findByUserIdAndScoreDateGreaterThanOrderByScoreDateAsc(
             String userId, LocalDate date);
+
+    /** 회원탈퇴 시 계정보다 먼저 지운다 (FK: daily_score.user_id → user.id) */
+    void deleteByUserId(String userId);
 }

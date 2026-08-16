@@ -26,6 +26,8 @@ import cloud.anzaanza.antiagingdna.entity.enums.SmokingStatus;
 import cloud.anzaanza.antiagingdna.exception.EmailAlreadyUsedException;
 import cloud.anzaanza.antiagingdna.exception.LoginIdAlreadyUsedException;
 import cloud.anzaanza.antiagingdna.exception.SignUpNotAllowedException;
+import cloud.anzaanza.antiagingdna.repository.DailyScoreRepository;
+import cloud.anzaanza.antiagingdna.repository.DiaryRepository;
 import cloud.anzaanza.antiagingdna.repository.DnaInfoRepository;
 import cloud.anzaanza.antiagingdna.repository.UserAgreementRepository;
 import cloud.anzaanza.antiagingdna.repository.UserRepository;
@@ -57,6 +59,8 @@ class AuthServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private UserAgreementRepository userAgreementRepository;
     @Mock private DnaInfoRepository dnaInfoRepository;
+    @Mock private DiaryRepository diaryRepository;
+    @Mock private DailyScoreRepository dailyScoreRepository;
     @Mock private ScoringService scoringService;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
@@ -69,6 +73,8 @@ class AuthServiceTest {
                 userRepository,
                 userAgreementRepository,
                 dnaInfoRepository,
+                diaryRepository,
+                dailyScoreRepository,
                 passwordEncoder,
                 scoringService,
                 clock);
@@ -219,6 +225,45 @@ class AuthServiceTest {
         String wrongPassword = catchMessage(() -> authService.authenticate(LOGIN_ID, "wrong-password-1"));
 
         assertThat(unknownAccount).isEqualTo(wrongPassword);
+    }
+
+    // ── 회원탈퇴 / 중복 확인 ─────────────────────────────────────
+
+    @Test
+    void 회원탈퇴하면_연관_데이터가_전부_지워진다() {
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(storedUser()));
+
+        authService.withdraw("user-1");
+
+        verify(userAgreementRepository).deleteByUserId("user-1");
+        verify(diaryRepository).deleteByAuthorId("user-1");
+        verify(dailyScoreRepository).deleteByUserId("user-1");
+        verify(dnaInfoRepository).deleteById("user-1");
+        verify(userRepository).deleteById("user-1");
+    }
+
+    @Test
+    void 존재하지_않는_계정을_탈퇴시키려_하면_거부한다() {
+        when(userRepository.findById("nobody")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.withdraw("nobody"))
+                .isInstanceOf(BadCredentialsException.class);
+
+        verify(userRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void 이메일_중복_확인은_리포지토리_결과를_그대로_돌려준다() {
+        when(userRepository.existsByEmail(EMAIL)).thenReturn(true);
+
+        assertThat(authService.emailExists(EMAIL)).isTrue();
+    }
+
+    @Test
+    void 아이디_중복_확인은_리포지토리_결과를_그대로_돌려준다() {
+        when(userRepository.existsByLoginId(LOGIN_ID)).thenReturn(false);
+
+        assertThat(authService.loginIdExists(LOGIN_ID)).isFalse();
     }
 
     // ── 헬퍼 ─────────────────────────────────────────────────────

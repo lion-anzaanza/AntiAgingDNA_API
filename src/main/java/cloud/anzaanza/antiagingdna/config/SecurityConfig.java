@@ -34,7 +34,11 @@ public class SecurityConfig {
 
     /** 인증 없이 열어두는 경로 */
     private static final String[] PUBLIC_ENDPOINTS = {
-        "/health", "/api/auth/signup", "/api/auth/login"
+        "/health",
+        "/api/auth/signup",
+        "/api/auth/login",
+        "/api/auth/check-email",
+        "/api/auth/check-login-id"
     };
 
     /** 시연용 문서. 노출 범위를 좁히는 건 별도 과제다 */
