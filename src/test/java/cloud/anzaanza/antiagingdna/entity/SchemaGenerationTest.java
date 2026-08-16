@@ -6,12 +6,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import org.assertj.core.api.SoftAssertions;
 import org.hibernate.boot.Metadata;
 import org.hibernate.boot.MetadataSources;
@@ -41,8 +43,10 @@ class SchemaGenerationTest {
         User.class, UserAgreement.class, DnaInfo.class, Diary.class, DailyScore.class
     };
 
-    private static final Path MIGRATION =
-            Path.of("src", "main", "resources", "db", "migration", "V1__init.sql");
+    private static final Path MIGRATION_DIR = Path.of("src", "main", "resources", "db", "migration");
+
+    /** 대조·존재 확인에 쓰는 대표 파일 — Flyway 기본 위치·네이밍 규칙 점검용 */
+    private static final Path MIGRATION = MIGRATION_DIR.resolve("V1__init.sql");
 
     /** 운영 DB 버전(docs/INFRA_INFO.md). 서버를 올리면 이 값도 같이 올린다. */
     private static final String PROD_MYSQL_VERSION = "8.0.46";
@@ -83,7 +87,40 @@ class SchemaGenerationTest {
             StandardServiceRegistryBuilder.destroy(registry);
         }
         entityDdl = Files.readString(target).toLowerCase();
-        migrationDdl = stripComments(Files.readString(MIGRATION).toLowerCase());
+        migrationDdl = stripComments(readAllMigrations().toLowerCase());
+    }
+
+    /**
+     * 모든 {@code V<n>__*.sql} 을 버전 순서로 이어붙인다. 마이그레이션은 한 번 배포되면
+     * 손대지 않으므로(체크섬 고정), 스키마 변경은 새 파일로 쌓인다 — 대조 대상도 전부여야 한다.
+     */
+    private static String readAllMigrations() throws IOException {
+        try (Stream<Path> files = Files.list(MIGRATION_DIR)) {
+            List<Path> migrations = files
+                    .filter(p -> p.getFileName().toString().matches("V\\d+(\\.\\d+)*__.+\\.sql"))
+                    .sorted(Comparator.comparing(SchemaGenerationTest::versionOf))
+                    .toList();
+            StringBuilder combined = new StringBuilder();
+            for (Path migration : migrations) {
+                combined.append(Files.readString(migration)).append('\n');
+            }
+            return combined.toString();
+        }
+    }
+
+    /**
+     * 파일명 문자열 정렬은 두 자리 버전에서 깨진다({@code V10} 이 {@code V2} 보다 앞에 옴,
+     * '0' &lt; '_' &lt; '2'). 각 버전 구성요소를 숫자로 파싱해 0-padding 한 문자열로 바꿔
+     * 사전식 정렬이 곧 버전 순서가 되게 한다 — Flyway 의 {@code V<n>(.n)*} 규칙 전부 지원.
+     */
+    private static String versionOf(Path path) {
+        Matcher m = Pattern.compile("V(\\d+(?:\\.\\d+)*)__").matcher(path.getFileName().toString());
+        assertThat(m.find()).describedAs("마이그레이션 파일명에서 버전 파싱 실패: %s", path).isTrue();
+        StringBuilder padded = new StringBuilder();
+        for (String part : m.group(1).split("\\.")) {
+            padded.append(String.format("%010d", Integer.parseInt(part))).append('.');
+        }
+        return padded.toString();
     }
 
     @Test
@@ -162,13 +199,26 @@ class SchemaGenerationTest {
 
     // ── 파싱 유틸 ─────────────────────────────────────────────────
 
-    /** {@code create table X (...)} 전부를 테이블명 → 컬럼명 목록으로 */
+    /**
+     * {@code create table X (...)} 로 테이블을 만들고, 이후 마이그레이션의
+     * {@code alter table X add column Y ...} 로 늘어난 컬럼을 같은 테이블에 합친다.
+     */
     private static Map<String, List<String>> tablesOf(String sql) {
         Map<String, List<String>> tables = new LinkedHashMap<>();
         Matcher m = Pattern.compile("create table (\\w+)\\s*\\((.*?)\\)\\s*engine", Pattern.DOTALL).matcher(sql);
         while (m.find()) {
-            tables.put(m.group(1), columnsIn(m.group(2)));
+            tables.put(m.group(1), new ArrayList<>(columnsIn(m.group(2))));
         }
+
+        Matcher alterColumn =
+                Pattern.compile("alter table (\\w+) add column (\\w+)").matcher(sql);
+        while (alterColumn.find()) {
+            String table = alterColumn.group(1);
+            List<String> columns = tables.get(table);
+            assertThat(columns).describedAs("alter table %s — 없는 테이블", table).isNotNull();
+            columns.add(alterColumn.group(2));
+        }
+
         assertThat(tables).describedAs("파싱된 테이블").isNotEmpty();
         return tables;
     }

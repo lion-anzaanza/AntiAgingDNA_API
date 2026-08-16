@@ -24,6 +24,7 @@ import cloud.anzaanza.antiagingdna.entity.enums.SensitivityLevel;
 import cloud.anzaanza.antiagingdna.entity.enums.SleepType;
 import cloud.anzaanza.antiagingdna.entity.enums.SmokingStatus;
 import cloud.anzaanza.antiagingdna.exception.EmailAlreadyUsedException;
+import cloud.anzaanza.antiagingdna.exception.LoginIdAlreadyUsedException;
 import cloud.anzaanza.antiagingdna.exception.SignUpNotAllowedException;
 import cloud.anzaanza.antiagingdna.repository.DnaInfoRepository;
 import cloud.anzaanza.antiagingdna.repository.UserAgreementRepository;
@@ -49,6 +50,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
+    private static final String LOGIN_ID = "nosleep_dev";
     private static final String EMAIL = "nosleep@gmail.com";
     private static final String RAW_PASSWORD = "password1234";
 
@@ -131,6 +133,16 @@ class AuthServiceTest {
     }
 
     @Test
+    void 이미_가입된_아이디면_거부한다() {
+        when(userRepository.existsByLoginId(LOGIN_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> authService.signUp(signUpRequest(allAgreed())))
+                .isInstanceOf(LoginIdAlreadyUsedException.class);
+
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
     void 이미_가입된_이메일이면_거부한다() {
         when(userRepository.existsByEmail(EMAIL)).thenReturn(true);
 
@@ -183,28 +195,28 @@ class AuthServiceTest {
 
     @Test
     void 올바른_자격증명이면_사용자를_돌려준다() {
-        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(storedUser()));
+        when(userRepository.findByLoginId(LOGIN_ID)).thenReturn(Optional.of(storedUser()));
 
-        assertThat(authService.authenticate(EMAIL, RAW_PASSWORD).getEmail()).isEqualTo(EMAIL);
+        assertThat(authService.authenticate(LOGIN_ID, RAW_PASSWORD).getLoginId()).isEqualTo(LOGIN_ID);
     }
 
     @Test
     void 비밀번호가_틀리면_거부한다() {
-        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(storedUser()));
+        when(userRepository.findByLoginId(LOGIN_ID)).thenReturn(Optional.of(storedUser()));
 
-        assertThatThrownBy(() -> authService.authenticate(EMAIL, "wrong-password-1"))
+        assertThatThrownBy(() -> authService.authenticate(LOGIN_ID, "wrong-password-1"))
                 .isInstanceOf(BadCredentialsException.class);
     }
 
     /** 없는 계정과 틀린 비밀번호의 응답이 구분되면 로그인 화면이 가입 여부 조회 API 가 된다 */
     @Test
     void 없는_계정도_같은_메시지로_거부한다() {
-        when(userRepository.findByEmail("nobody@gmail.com")).thenReturn(Optional.empty());
+        when(userRepository.findByLoginId("nobody")).thenReturn(Optional.empty());
 
-        String unknownAccount = catchMessage(() -> authService.authenticate("nobody@gmail.com", RAW_PASSWORD));
+        String unknownAccount = catchMessage(() -> authService.authenticate("nobody", RAW_PASSWORD));
 
-        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(storedUser()));
-        String wrongPassword = catchMessage(() -> authService.authenticate(EMAIL, "wrong-password-1"));
+        when(userRepository.findByLoginId(LOGIN_ID)).thenReturn(Optional.of(storedUser()));
+        String wrongPassword = catchMessage(() -> authService.authenticate(LOGIN_ID, "wrong-password-1"));
 
         assertThat(unknownAccount).isEqualTo(wrongPassword);
     }
@@ -218,6 +230,7 @@ class AuthServiceTest {
     private User storedUser() {
         return User.builder()
                 .id("user-1")
+                .loginId(LOGIN_ID)
                 .email(EMAIL)
                 .password(passwordEncoder.encode(RAW_PASSWORD))
                 .nickname("안자안자")
@@ -248,6 +261,7 @@ class AuthServiceTest {
 
     private static SignUpRequest signUpRequest(Map<AgreementType, Boolean> agreements, int birthYear) {
         return new SignUpRequest(
+                LOGIN_ID,
                 EMAIL,
                 RAW_PASSWORD,
                 "안자안자",

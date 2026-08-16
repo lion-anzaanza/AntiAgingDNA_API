@@ -80,6 +80,7 @@ class AuthControllerTest {
     private static User user() {
         return User.builder()
                 .id("user-1")
+                .loginId("nosleep_dev")
                 .email("nosleep@gmail.com")
                 .password("$2a$10$hash")
                 .nickname("안자안자")
@@ -129,12 +130,12 @@ class AuthControllerTest {
     @Test
     void 로그인_실패는_401_이다() throws Exception {
         given(authService.authenticate(anyString(), anyString()))
-                .willThrow(new BadCredentialsException("이메일 또는 비밀번호가 올바르지 않습니다"));
+                .willThrow(new BadCredentialsException("아이디 또는 비밀번호가 올바르지 않습니다"));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"email":"nosleep@gmail.com","password":"wrong-password"}"""))
+                                {"loginId":"nosleep_dev","password":"wrong-password"}"""))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -206,7 +207,7 @@ class AuthControllerTest {
     /** 목업 STEP 2·3·4 를 채웠을 때 클라이언트가 실제로 보내는 본문 */
     private static final String SIGNUP_JSON =
             """
-            {"email":"nosleep@gmail.com","password":"password1234","nickname":"안자안자","birthYear":2002,
+            {"loginId":"nosleep_dev","email":"nosleep@gmail.com","password":"password1234","nickname":"안자안자","birthYear":2002,
              "diagnosis":{"sleepType":"MORNING",
               "sleepDaytimeDrowsy":true,"sleepOnsetDelayed":false,
               "sleepNightAwakening":false,"sleepUnrefreshed":false,
@@ -224,6 +225,7 @@ class AuthControllerTest {
             agreements.put(type, true);
         }
         return new SignUpRequest(
+                "nosleep_dev",
                 "nosleep@gmail.com",
                 password,
                 "안자안자",

@@ -14,6 +14,7 @@ import cloud.anzaanza.antiagingdna.entity.enums.SocialContact;
 import cloud.anzaanza.antiagingdna.entity.enums.SugarIntake;
 import cloud.anzaanza.antiagingdna.entity.enums.WalkDuration;
 import cloud.anzaanza.antiagingdna.entity.enums.WaterIntake;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -40,8 +41,10 @@ public record DiaryRequest(
         @NotNull @Min(1) @Max(5) Integer conditionLevel,
 
         // ── 수면 ─────────────────────────────────────────────────
-        LocalTime sleepStartedAt,
-        LocalTime sleepEndedAt,
+        // 날짜 없이 시각만 받는다 — 기상이 취침보다 이르거나 같으면 자정을 넘긴 것으로 본다
+        // (ItemScores.sleepMinutes). 일지가 하루 1건이라 그 외의 해석이 없다.
+        @Schema(type = "string", pattern = "HH:mm(:ss)?", example = "23:30") LocalTime sleepStartedAt,
+        @Schema(type = "string", pattern = "HH:mm(:ss)?", example = "07:00") LocalTime sleepEndedAt,
         SleepLatency sleepLatency,
         @Min(1) @Max(5) Integer sleepSatisfaction,
 
@@ -57,7 +60,8 @@ public record DiaryRequest(
         ExerciseType exerciseType,
         SittingHours sittingHours,
 
-        // 0~10 NRS 표준 (기획 일지 §2). 목업의 0~100 슬라이더가 아니다
+        // 1~10 (0~10 NRS 로 불리는 척도의 이름일 뿐, 이 구현의 허용 도메인은 1~10 이다).
+        // 목업의 0~100 슬라이더가 아니다. 0 허용 여부는 PLANNING_OPEN_ITEMS.md 미결정 항목 참고
         @Min(1) @Max(10) Integer stressLevel,
         MoodRecovery moodRecovery,
 
