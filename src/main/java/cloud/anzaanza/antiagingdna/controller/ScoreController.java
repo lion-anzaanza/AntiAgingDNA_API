@@ -2,6 +2,7 @@ package cloud.anzaanza.antiagingdna.controller;
 
 import cloud.anzaanza.antiagingdna.dto.DailyScoreResponse;
 import cloud.anzaanza.antiagingdna.service.ScoringService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -35,11 +36,13 @@ public class ScoreController {
     }
 
     /** 오늘의 종합점수. 일지를 쓰지 않았어도 baseline 으로 산출된다 */
+    @Operation(summary = "오늘의 종합점수", description = "일지를 쓰지 않은 날도 baseline 으로 산출된다(null 없음).")
     @GetMapping("/today")
     public DailyScoreResponse today(@AuthenticationPrincipal Jwt jwt) {
         return DailyScoreResponse.from(scoringService.scoreOn(jwt.getSubject(), LocalDate.now(clock)));
     }
 
+    @Operation(summary = "특정 날짜 종합점수", description = "미래 날짜는 400.")
     @GetMapping("/{date}")
     public DailyScoreResponse on(
             @AuthenticationPrincipal Jwt jwt,
@@ -52,6 +55,9 @@ public class ScoreController {
     }
 
     /** 추이 그래프용 구간 조회. 기록이 없는 날은 채우지 않는다 */
+    @Operation(
+            summary = "종합점수 구간 조회",
+            description = "추이 그래프용. 기록이 없는 날은 배열에서 채우지 않는다. 최대 366일.")
     @GetMapping
     public List<DailyScoreResponse> between(
             @AuthenticationPrincipal Jwt jwt,

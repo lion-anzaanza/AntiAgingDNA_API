@@ -15,6 +15,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.assertj.core.api.SoftAssertions;
+import org.flywaydb.core.api.MigrationVersion;
 import org.hibernate.boot.Metadata;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistry;
@@ -110,17 +111,14 @@ class SchemaGenerationTest {
 
     /**
      * 파일명 문자열 정렬은 두 자리 버전에서 깨진다({@code V10} 이 {@code V2} 보다 앞에 옴,
-     * '0' &lt; '_' &lt; '2'). 각 버전 구성요소를 숫자로 파싱해 0-padding 한 문자열로 바꿔
-     * 사전식 정렬이 곧 버전 순서가 되게 한다 — Flyway 의 {@code V<n>(.n)*} 규칙 전부 지원.
+     * '0' &lt; '_' &lt; '2'). 직접 파싱해 비교하는 대신 Flyway 가 이미 제공하는
+     * {@link MigrationVersion}(테스트 클래스패스에 {@code flyway-mysql} 로 이미 있다)을
+     * 쓴다 — Flyway 자신의 버전 정렬 규칙과 항상 같게 유지된다.
      */
-    private static String versionOf(Path path) {
+    private static MigrationVersion versionOf(Path path) {
         Matcher m = Pattern.compile("V(\\d+(?:\\.\\d+)*)__").matcher(path.getFileName().toString());
         assertThat(m.find()).describedAs("마이그레이션 파일명에서 버전 파싱 실패: %s", path).isTrue();
-        StringBuilder padded = new StringBuilder();
-        for (String part : m.group(1).split("\\.")) {
-            padded.append(String.format("%010d", Integer.parseInt(part))).append('.');
-        }
-        return padded.toString();
+        return MigrationVersion.fromVersion(m.group(1));
     }
 
     @Test

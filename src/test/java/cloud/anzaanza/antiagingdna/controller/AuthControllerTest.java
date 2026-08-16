@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -200,6 +201,39 @@ class AuthControllerTest {
 
         mockMvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + forged))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void 탈퇴는_토큰이_없으면_401_이다() throws Exception {
+        mockMvc.perform(delete("/api/auth/me")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void 탈퇴는_유효한_토큰이면_204_를_돌려준다() throws Exception {
+        String token = tokenService.issue(user()).value();
+
+        mockMvc.perform(delete("/api/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isNoContent());
+    }
+
+    // ── 공개 엔드포인트: 중복 확인 ─────────────────────────────────
+
+    @Test
+    void 이메일_중복_확인은_토큰_없이_호출된다() throws Exception {
+        given(authService.emailExists("nosleep@gmail.com")).willReturn(true);
+
+        mockMvc.perform(get("/api/auth/check-email").param("email", "nosleep@gmail.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.available").value(false));
+    }
+
+    @Test
+    void 아이디_중복_확인은_토큰_없이_호출된다() throws Exception {
+        given(authService.loginIdExists("nosleep_dev")).willReturn(false);
+
+        mockMvc.perform(get("/api/auth/check-login-id").param("loginId", "nosleep_dev"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.available").value(true));
     }
 
     // ── 헬퍼 ─────────────────────────────────────────────────────
