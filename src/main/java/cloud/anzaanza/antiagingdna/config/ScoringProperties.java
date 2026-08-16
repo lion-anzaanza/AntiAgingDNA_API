@@ -18,6 +18,19 @@ public record ScoringProperties(
         String version, Weights weights, Alpha alpha, int movingAverageDays, GradeThresholds grade) {
 
     /**
+     * {@code scoring.grade.*} 가 하나도 없으면 {@link #grade} 가 통째로 {@code null} 로
+     * 바인딩된다(중첩 레코드라 부분 바인딩이 안 된다) — 그 상태로 넘어가면
+     * {@code GradeCalculator} 가 매 요청(점수·DNA 조회)마다 NPE 를 낸다. DB_URL·JWT_SECRET
+     * 처럼 <b>부팅 시점에</b> 실패하게 한다.
+     */
+    public ScoringProperties {
+        if (grade == null) {
+            throw new IllegalStateException(
+                    "scoring.grade.good-min / scoring.grade.warn-min 설정이 없다");
+        }
+    }
+
+    /**
      * 영역 가중치 W_c. 합이 1.000 이어야 한다 (기획 §6).
      *
      * <p>기획 원안은 신체 .30 / 정신 .25 / 감정 .20 / 사회 .15 / 환경 .10 이었으나, 환경이
