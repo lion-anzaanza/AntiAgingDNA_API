@@ -1,5 +1,6 @@
 package cloud.anzaanza.antiagingdna.service;
 
+import cloud.anzaanza.antiagingdna.config.ScoringProperties;
 import cloud.anzaanza.antiagingdna.dto.DnaInfoResponse;
 import cloud.anzaanza.antiagingdna.entity.DnaInfo;
 import cloud.anzaanza.antiagingdna.exception.DiagnosisNotFoundException;
@@ -19,9 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class DnaInfoService {
 
     private final DnaInfoRepository dnaInfoRepository;
+    private final ScoringProperties properties;
 
-    public DnaInfoService(DnaInfoRepository dnaInfoRepository) {
+    public DnaInfoService(DnaInfoRepository dnaInfoRepository, ScoringProperties properties) {
         this.dnaInfoRepository = dnaInfoRepository;
+        this.properties = properties;
     }
 
     @Transactional(readOnly = true)
@@ -29,6 +32,6 @@ public class DnaInfoService {
         DnaInfo dna = dnaInfoRepository
                 .findById(userId)
                 .orElseThrow(() -> new DiagnosisNotFoundException(userId));
-        return DnaInfoResponse.from(dna, BaselineCalculator.of(dna));
+        return DnaInfoResponse.from(dna, BaselineCalculator.of(dna), properties.grade());
     }
 }

@@ -14,7 +14,21 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 과거 점수가 어떤 파라미터로 계산됐는지 추적할 수 있다.
  */
 @ConfigurationProperties(prefix = "scoring")
-public record ScoringProperties(String version, Weights weights, Alpha alpha, int movingAverageDays) {
+public record ScoringProperties(
+        String version, Weights weights, Alpha alpha, int movingAverageDays, GradeThresholds grade) {
+
+    /**
+     * {@code scoring.grade.*} 가 하나도 없으면 {@link #grade} 가 통째로 {@code null} 로
+     * 바인딩된다(중첩 레코드라 부분 바인딩이 안 된다) — 그 상태로 넘어가면
+     * {@code GradeCalculator} 가 매 요청(점수·DNA 조회)마다 NPE 를 낸다. DB_URL·JWT_SECRET
+     * 처럼 <b>부팅 시점에</b> 실패하게 한다.
+     */
+    public ScoringProperties {
+        if (grade == null) {
+            throw new IllegalStateException(
+                    "scoring.grade.good-min / scoring.grade.warn-min 설정이 없다");
+        }
+    }
 
     /**
      * 영역 가중치 W_c. 합이 1.000 이어야 한다 (기획 §6).
@@ -35,4 +49,15 @@ public record ScoringProperties(String version, Weights weights, Alpha alpha, in
      * 기획 §7② 확정값 (shrinkage 7 · cap 0.95).
      */
     public record Alpha(int shrinkage, BigDecimal cap) {}
+
+    /**
+     * 점수(0~100) → 3단계 등급 경계값 — 2026-08-17 결정(FE backend-backlog.md #22,
+     * {@code docs/PLANNING_OPEN_ITEMS.md} B-4). {@code goodMin} 이상은 좋음, {@code warnMin}
+     * 이상 {@code goodMin} 미만은 주의, {@code warnMin} 미만은 위험.
+     *
+     * <p>점수 산출 자체를 바꾸지 않는 <b>표시 전용</b> 값이라 {@link #weights}/{@link #alpha} 와
+     * 달리 바뀌어도 {@link #version} 을 올릴 필요가 없다 — 과거 점수와 섞여도 문제 될 원본이
+     * 없다(등급은 저장하지 않고 매번 다시 계산한다).
+     */
+    public record GradeThresholds(BigDecimal goodMin, BigDecimal warnMin) {}
 }

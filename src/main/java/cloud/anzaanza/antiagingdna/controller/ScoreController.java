@@ -1,5 +1,6 @@
 package cloud.anzaanza.antiagingdna.controller;
 
+import cloud.anzaanza.antiagingdna.config.ScoringProperties;
 import cloud.anzaanza.antiagingdna.dto.DailyScoreResponse;
 import cloud.anzaanza.antiagingdna.service.ScoringService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,10 +29,12 @@ public class ScoreController {
     private static final int MAX_RANGE_DAYS = 366;
 
     private final ScoringService scoringService;
+    private final ScoringProperties properties;
     private final Clock clock;
 
-    public ScoreController(ScoringService scoringService, Clock clock) {
+    public ScoreController(ScoringService scoringService, ScoringProperties properties, Clock clock) {
         this.scoringService = scoringService;
+        this.properties = properties;
         this.clock = clock;
     }
 
@@ -39,7 +42,8 @@ public class ScoreController {
     @Operation(summary = "오늘의 종합점수", description = "일지를 쓰지 않은 날도 baseline 으로 산출된다(null 없음).")
     @GetMapping("/today")
     public DailyScoreResponse today(@AuthenticationPrincipal Jwt jwt) {
-        return DailyScoreResponse.from(scoringService.scoreOn(jwt.getSubject(), LocalDate.now(clock)));
+        return DailyScoreResponse.from(
+                scoringService.scoreOn(jwt.getSubject(), LocalDate.now(clock)), properties.grade());
     }
 
     @Operation(summary = "특정 날짜 종합점수", description = "미래 날짜는 400.")
@@ -51,7 +55,7 @@ public class ScoreController {
         if (date.isAfter(LocalDate.now(clock))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "미래 날짜의 점수는 없습니다");
         }
-        return DailyScoreResponse.from(scoringService.scoreOn(jwt.getSubject(), date));
+        return DailyScoreResponse.from(scoringService.scoreOn(jwt.getSubject(), date), properties.grade());
     }
 
     /** 추이 그래프용 구간 조회. 기록이 없는 날은 채우지 않는다 */
@@ -72,7 +76,7 @@ public class ScoreController {
                     HttpStatus.BAD_REQUEST, "한 번에 조회할 수 있는 구간은 " + MAX_RANGE_DAYS + "일까지입니다");
         }
         return scoringService.scoresBetween(jwt.getSubject(), from, to).stream()
-                .map(DailyScoreResponse::from)
+                .map(score -> DailyScoreResponse.from(score, properties.grade()))
                 .toList();
     }
 }
