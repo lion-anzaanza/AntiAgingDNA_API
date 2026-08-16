@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Tag;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -29,6 +30,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
 @Tag("integration")
+// DemoAccountSeeder 가 부팅마다 계정+일지 15건을 쓰는 걸 막는다 — 이 기반을 쓰는 모든
+// 테스트 클래스마다 반복되면 느려지고, 이 계정을 전제하지 않은 테스트의 관심사도 아니다.
+// DemoAccountSeederTest 처럼 직접 검증이 필요한 곳은 서브클래스에서 이 값을 다시 켠다
+// (하위 클래스의 @TestPropertySource 가 상위 클래스 것보다 우선한다).
+@TestPropertySource(properties = "app.seed-demo.enabled=false")
 public abstract class IntegrationTest {
 
     /** 운영과 같은 메이저 버전. 다르면 여기서 통과한 스키마가 운영에서 깨질 수 있다 */
