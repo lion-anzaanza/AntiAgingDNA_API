@@ -154,6 +154,7 @@ class ScoringApiTest {
                 .andExpect(jsonPath("$.date").value("2026-08-10"))
                 .andExpect(jsonPath("$.displayTotal").value(93.75))
                 .andExpect(jsonPath("$.grade").value("GOOD"))
+                .andExpect(jsonPath("$.orbState").value("GOOD_HIGH"))
                 .andExpect(jsonPath("$.dailyTotal").doesNotExist())
                 .andExpect(jsonPath("$.scoringVersion").value("test-v1"));
     }

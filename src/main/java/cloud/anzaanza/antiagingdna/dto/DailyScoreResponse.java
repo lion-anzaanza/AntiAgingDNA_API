@@ -4,6 +4,8 @@ import cloud.anzaanza.antiagingdna.config.ScoringProperties;
 import cloud.anzaanza.antiagingdna.entity.DailyScore;
 import cloud.anzaanza.antiagingdna.service.scoring.Grade;
 import cloud.anzaanza.antiagingdna.service.scoring.GradeCalculator;
+import cloud.anzaanza.antiagingdna.service.scoring.OrbState;
+import cloud.anzaanza.antiagingdna.service.scoring.OrbStateCalculator;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
@@ -15,6 +17,8 @@ import java.time.LocalDate;
  * @param displayTotal 화면에 표시하는 종합점수 — baseline 과 결합한 "추세". 항상 존재한다
  * @param grade {@code displayTotal} 의 3단계 등급(좋음/주의/위험) — 2026-08-17 결정
  *     (FE backend-backlog.md #22). {@code displayTotal} 이 항상 존재하므로 이 필드도 항상 존재한다
+ * @param orbState {@code displayTotal} 의 홈 오브 색상 7단계 — 2026-08-17 결정
+ *     (FE backend-backlog.md #25). {@code grade} 의 70/40 경계를 하드 서브 경계로 삼아 세분화한다
  * @param scoringVersion 이 값을 산출한 파라미터 버전. 재보정 전후 점수를 섞어 보지 않기 위한 축이다
  */
 public record DailyScoreResponse(
@@ -23,6 +27,7 @@ public record DailyScoreResponse(
         BigDecimal dailyTotal,
         BigDecimal displayTotal,
         Grade grade,
+        OrbState orbState,
         String scoringVersion) {
 
     public static DailyScoreResponse from(DailyScore score, ScoringProperties.GradeThresholds thresholds) {
@@ -32,6 +37,7 @@ public record DailyScoreResponse(
                 score.getDailyTotal(),
                 score.getDisplayTotal(),
                 GradeCalculator.of(score.getDisplayTotal(), thresholds),
+                OrbStateCalculator.of(score.getDisplayTotal(), thresholds),
                 score.getScoringVersion());
     }
 }
