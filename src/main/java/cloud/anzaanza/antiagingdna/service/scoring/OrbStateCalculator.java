@@ -24,8 +24,8 @@ public final class OrbStateCalculator {
 
         if (score.compareTo(goodMin) >= 0) {
             BigDecimal range = BigDecimal.valueOf(100).subtract(goodMin);
-            BigDecimal third1 = goodMin.add(divide(range, 1));
-            BigDecimal third2 = goodMin.add(divide(range, 2));
+            BigDecimal third1 = goodMin.add(thirdPoint(range, 1));
+            BigDecimal third2 = goodMin.add(thirdPoint(range, 2));
             if (score.compareTo(third2) >= 0) {
                 return OrbState.GOOD_HIGH;
             }
@@ -39,8 +39,8 @@ public final class OrbStateCalculator {
         return score.compareTo(mid) >= 0 ? OrbState.DANGER_HIGH : OrbState.DANGER_LOW;
     }
 
-    /** {@code range} 를 3등분한 {@code multiple} 번째 지점 (1 → 1/3, 2 → 2/3) */
-    private static BigDecimal divide(BigDecimal range, int multiple) {
-        return range.multiply(BigDecimal.valueOf(multiple)).divide(BigDecimal.valueOf(3), 4, RoundingMode.HALF_UP);
+    /** {@code range} 를 3등분한 {@code numerator} 번째 지점 (1 → 1/3, 2 → 2/3) */
+    private static BigDecimal thirdPoint(BigDecimal range, int numerator) {
+        return range.multiply(BigDecimal.valueOf(numerator)).divide(BigDecimal.valueOf(3), 4, RoundingMode.HALF_UP);
     }
 }
