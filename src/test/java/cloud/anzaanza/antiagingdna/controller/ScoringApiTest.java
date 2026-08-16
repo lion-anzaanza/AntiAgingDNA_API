@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import cloud.anzaanza.antiagingdna.config.JwtProperties;
+import cloud.anzaanza.antiagingdna.config.ScoringProperties;
 import cloud.anzaanza.antiagingdna.config.SecurityConfig;
 import cloud.anzaanza.antiagingdna.dto.DnaInfoResponse;
 import cloud.anzaanza.antiagingdna.entity.DailyScore;
@@ -48,15 +49,28 @@ import org.springframework.web.context.WebApplicationContext;
 /** DNA·점수 조회 API — 인증 요구와 응답 형태. */
 @WebMvcTest({DnaInfoController.class, ScoreController.class})
 @Import({SecurityConfig.class, TokenService.class, ScoringApiTest.FixedClock.class})
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({JwtProperties.class, ScoringProperties.class})
 @TestPropertySource(
         properties = {
             "jwt.secret=테스트용-서명키-32바이트-이상이어야-한다-0123456789",
-            "jwt.access-token-ttl=24h"
+            "jwt.access-token-ttl=24h",
+            "scoring.version=test-v1",
+            "scoring.weights.physical=0.333",
+            "scoring.weights.mental=0.278",
+            "scoring.weights.emotion=0.222",
+            "scoring.weights.social=0.167",
+            "scoring.weights.environment=0",
+            "scoring.alpha.shrinkage=7",
+            "scoring.alpha.cap=0.95",
+            "scoring.moving-average-days=7",
+            "scoring.grade.good-min=70",
+            "scoring.grade.warn-min=40"
         })
 class ScoringApiTest {
 
     private static final LocalDate TODAY = LocalDate.of(2026, 8, 10);
+    private static final ScoringProperties.GradeThresholds GRADE_THRESHOLDS =
+            new ScoringProperties.GradeThresholds(new BigDecimal("70"), new BigDecimal("40"));
 
     @TestConfiguration
     static class FixedClock {
@@ -105,7 +119,8 @@ class ScoringApiTest {
     @Test
     void DNA_조회는_원본_답변과_파생_baseline_을_함께_준다() throws Exception {
         DnaInfo dna = dna();
-        given(dnaInfoService.myDna("user-1")).willReturn(DnaInfoResponse.from(dna, BaselineCalculator.of(dna)));
+        given(dnaInfoService.myDna("user-1"))
+                .willReturn(DnaInfoResponse.from(dna, BaselineCalculator.of(dna), GRADE_THRESHOLDS));
 
         mockMvc.perform(get("/api/dna").header("Authorization", "Bearer " + token()))
                 .andExpect(status().isOk())
@@ -113,7 +128,9 @@ class ScoringApiTest {
                 .andExpect(jsonPath("$.sleepIssues.daytimeDrowsy").value(true))
                 // 수면질 75 · 운동 100 · 음주 100 · 흡연 100 → 93.75
                 .andExpect(jsonPath("$.baseline.physical").value(93.75))
+                .andExpect(jsonPath("$.baseline.grades.physical").value("GOOD"))
                 .andExpect(jsonPath("$.baseline.social").doesNotExist())
+                .andExpect(jsonPath("$.baseline.grades.social").doesNotExist())
                 .andExpect(jsonPath("$.sensitivityCoefficients.caffeine").value(1.3));
     }
 
@@ -136,6 +153,7 @@ class ScoringApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.date").value("2026-08-10"))
                 .andExpect(jsonPath("$.displayTotal").value(93.75))
+                .andExpect(jsonPath("$.grade").value("GOOD"))
                 .andExpect(jsonPath("$.dailyTotal").doesNotExist())
                 .andExpect(jsonPath("$.scoringVersion").value("test-v1"));
     }

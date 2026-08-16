@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 
 import cloud.anzaanza.antiagingdna.config.ScoringProperties;
 import cloud.anzaanza.antiagingdna.config.ScoringProperties.Alpha;
+import cloud.anzaanza.antiagingdna.config.ScoringProperties.GradeThresholds;
 import cloud.anzaanza.antiagingdna.config.ScoringProperties.Weights;
 import cloud.anzaanza.antiagingdna.entity.DailyScore;
 import cloud.anzaanza.antiagingdna.entity.Diary;
@@ -57,7 +58,8 @@ class ScoringServiceTest {
                     new BigDecimal("0.167"),
                     BigDecimal.ZERO),
             new Alpha(7, new BigDecimal("0.95")),
-            7);
+            7,
+            new GradeThresholds(new BigDecimal("70"), new BigDecimal("40")));
 
     @Mock private DnaInfoRepository dnaInfoRepository;
     @Mock private DiaryRepository diaryRepository;

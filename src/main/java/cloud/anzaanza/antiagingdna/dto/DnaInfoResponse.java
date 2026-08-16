@@ -1,5 +1,6 @@
 package cloud.anzaanza.antiagingdna.dto;
 
+import cloud.anzaanza.antiagingdna.config.ScoringProperties;
 import cloud.anzaanza.antiagingdna.entity.DnaInfo;
 import cloud.anzaanza.antiagingdna.entity.enums.DrinkFrequency;
 import cloud.anzaanza.antiagingdna.entity.enums.ExerciseLevel;
@@ -19,7 +20,11 @@ import java.util.List;
  * <p>파생값을 저장하지 않고 조회 시점에 계산해서 내려준다. {@code dna_info} 는 원본만 담는다는
  * 설계 전제(파라미터 재보정 시 과거 산출 근거를 복원할 수 있어야 한다)를 API 도 따른다.
  *
- * @param baseline 영역별 baseline (기획 §A-3). 일지가 쌓이기 전 점수의 출발점이다
+ * @param baseline 영역별 baseline (기획 §A-3). 일지가 쌓이기 전 점수의 출발점이다. 등급은
+ *     이 baseline 스냅샷 기준이다 — 일지가 쌓이며 매일 바뀌는 결합값(baseline + 7일 이동평균)
+ *     기준 등급은 아직 API 에 없다(FE backend-backlog.md #10/#25 "5개 영역 밸런스"가 정확히
+ *     그걸 원하는데, 그 결합값 자체가 지금 저장·노출되지 않는다 — 별도로 필요하면 요청해달라고
+ *     회신에 남겼다)
  * @param sensitivityCoefficients 민감도 계수 k — 일지의 <b>감점분</b>에 곱해지는 개인화 축.
  *     선택지(Ⓐ 4점 척도)를 그대로 내려주는 {@code sensitivity} 와 짝이다
  */
@@ -63,7 +68,8 @@ public record DnaInfoResponse(
         }
     }
 
-    public static DnaInfoResponse from(DnaInfo dna, AreaScores baseline) {
+    public static DnaInfoResponse from(
+            DnaInfo dna, AreaScores baseline, ScoringProperties.GradeThresholds thresholds) {
         return new DnaInfoResponse(
                 dna.getCompletedAt(),
                 dna.getSleepType(),
@@ -83,7 +89,7 @@ public record DnaInfoResponse(
                 // 문항 순서가 곧 의미다 — WHO-5 는 5문항 합계로만 환산되므로 개별 이름이 없다
                 Arrays.asList(
                         dna.getWho5Q1(), dna.getWho5Q2(), dna.getWho5Q3(), dna.getWho5Q4(), dna.getWho5Q5()),
-                AreaScoreResponse.from(baseline),
+                AreaScoreResponse.from(baseline, thresholds),
                 SensitivityCoefficients.of(dna));
     }
 }

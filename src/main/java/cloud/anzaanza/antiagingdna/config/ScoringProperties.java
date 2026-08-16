@@ -14,7 +14,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 과거 점수가 어떤 파라미터로 계산됐는지 추적할 수 있다.
  */
 @ConfigurationProperties(prefix = "scoring")
-public record ScoringProperties(String version, Weights weights, Alpha alpha, int movingAverageDays) {
+public record ScoringProperties(
+        String version, Weights weights, Alpha alpha, int movingAverageDays, GradeThresholds grade) {
 
     /**
      * 영역 가중치 W_c. 합이 1.000 이어야 한다 (기획 §6).
@@ -35,4 +36,15 @@ public record ScoringProperties(String version, Weights weights, Alpha alpha, in
      * 기획 §7② 확정값 (shrinkage 7 · cap 0.95).
      */
     public record Alpha(int shrinkage, BigDecimal cap) {}
+
+    /**
+     * 점수(0~100) → 3단계 등급 경계값 — 2026-08-17 결정(FE backend-backlog.md #22,
+     * {@code docs/PLANNING_OPEN_ITEMS.md} B-4). {@code goodMin} 이상은 좋음, {@code warnMin}
+     * 이상 {@code goodMin} 미만은 주의, {@code warnMin} 미만은 위험.
+     *
+     * <p>점수 산출 자체를 바꾸지 않는 <b>표시 전용</b> 값이라 {@link #weights}/{@link #alpha} 와
+     * 달리 바뀌어도 {@link #version} 을 올릴 필요가 없다 — 과거 점수와 섞여도 문제 될 원본이
+     * 없다(등급은 저장하지 않고 매번 다시 계산한다).
+     */
+    public record GradeThresholds(BigDecimal goodMin, BigDecimal warnMin) {}
 }
