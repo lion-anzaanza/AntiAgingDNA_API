@@ -72,9 +72,9 @@ public final class ItemScores {
         return value == null ? null : clamp((value - 1) * 25.0);
     }
 
-    /** 스트레스 1~10 역채점 {@code s = 100 × (10 − x) / 9} (기획 §8 · 0~10 NRS) */
+    /** 스트레스 0~10 역채점 {@code s = 100 × (10 − x) / 10} (기획 §8 · 0~10 NRS, 도메인 2026-08-17 확정) */
     public static Double stress(Integer level) {
-        return level == null ? null : clamp(100.0 * (10 - level) / 9);
+        return level == null ? null : clamp(100.0 * (10 - level) / 10);
     }
 
     /** 수면 질 자가진단 {@code 100 − 25 × 체크수} (기획 §A-1) */

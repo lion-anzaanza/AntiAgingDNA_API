@@ -60,8 +60,8 @@ class ItemScoresTest {
     }
 
     @ParameterizedTest(name = "스트레스 {0} → {1}")
-    @CsvSource({"1, 100.0", "6, 44.44", "10, 0.0"})
-    void 스트레스는_1에서_10을_역채점한다(int level, double expected) {
+    @CsvSource({"0, 100.0", "1, 90.0", "6, 40.0", "10, 0.0"})
+    void 스트레스는_0에서_10을_역채점한다(int level, double expected) {
         assertThat(ItemScores.stress(level)).isCloseTo(expected, within(0.01));
     }
 
