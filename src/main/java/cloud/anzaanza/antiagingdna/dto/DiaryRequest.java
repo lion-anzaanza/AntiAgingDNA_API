@@ -60,9 +60,8 @@ public record DiaryRequest(
         ExerciseType exerciseType,
         SittingHours sittingHours,
 
-        // 1~10 (0~10 NRS 로 불리는 척도의 이름일 뿐, 이 구현의 허용 도메인은 1~10 이다).
-        // 목업의 0~100 슬라이더가 아니다. 0 허용 여부는 PLANNING_OPEN_ITEMS.md 미결정 항목 참고
-        @Min(1) @Max(10) Integer stressLevel,
+        // 0~10 NRS. 목업의 0~100 슬라이더가 아니다 (PLANNING_OPEN_ITEMS.md A-6, 2026-08-17 확정)
+        @Min(0) @Max(10) Integer stressLevel,
         MoodRecovery moodRecovery,
 
         // ── 사회 ─────────────────────────────────────────────────

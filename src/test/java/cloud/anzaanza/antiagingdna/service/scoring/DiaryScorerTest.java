@@ -45,7 +45,7 @@ class DiaryScorerTest {
                 .exercised(true)
                 .exerciseDuration(ExerciseDuration.ABOUT_30) // 55
                 .sittingHours(SittingHours.EIGHT_TO_TEN) // 45
-                .stressLevel(6) // 44.44 → k1.1 → 38.89
+                .stressLevel(6) // 40.0 → k1.1 → 34.0 (스트레스 도메인 0~10 확정, 2026-08-17)
                 .socialContact(SocialContact.BRIEF); // 60
     }
 
@@ -61,8 +61,9 @@ class DiaryScorerTest {
     void 정신은_수면_카페인_스트레스_사람만남의_평균이다() {
         AreaScores scores = DiaryScorer.of(workedExample().build(), MODERATE_SENSITIVITY);
 
-        // 기획 §B-3: (100+75+50+78+38.89+60)/6 = 67.0
-        assertThat(scores.get(Area.MENTAL)).isCloseTo(66.98, within(0.01));
+        // 기획 §B-3 예시(67.0)는 스트레스 1~10 도메인 기준. 0~10 확정(2026-08-17)으로
+        // 스트레스 원점수가 44.44→40.0 이 되며 (100+75+50+78+34+60)/6 = 66.17 로 소폭 이동한다.
+        assertThat(scores.get(Area.MENTAL)).isCloseTo(66.17, within(0.01));
     }
 
     @Test
@@ -78,7 +79,7 @@ class DiaryScorerTest {
     @Test
     void 감정은_당분간_스트레스_단일_소스다() {
         assertThat(DiaryScorer.of(workedExample().build(), MODERATE_SENSITIVITY).get(Area.EMOTION))
-                .isCloseTo(38.89, within(0.01));
+                .isCloseTo(34.0, within(0.01));
     }
 
     /**
