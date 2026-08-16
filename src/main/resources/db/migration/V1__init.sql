@@ -86,7 +86,7 @@ create table diary (
     exercise_duration   varchar(32),
     exercise_type       varchar(32)          comment '비채점 — 기획 §8 에 종류별 앵커가 없다',
     sitting_hours       varchar(32)          comment '역방향 단조 (U자 아님)',
-    stress_level        integer              comment '0~10 NRS. × k_stress',
+    stress_level        integer              comment '1~10 NRS. × k_stress',
     mood_recovery       varchar(32)          comment '(Phase 2) 앵커 미확정이라 아직 비채점',
     social_contact      varchar(32)          comment '(Phase 2) 사회 영역 당일 점수의 유일한 소스',
     meal_count          integer              comment '참고(비채점) 0~5, 5 = 5끼 이상',
