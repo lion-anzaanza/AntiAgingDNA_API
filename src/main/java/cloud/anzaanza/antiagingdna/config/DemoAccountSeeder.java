@@ -24,6 +24,7 @@ import cloud.anzaanza.antiagingdna.entity.enums.SocialContactLevel;
 import cloud.anzaanza.antiagingdna.entity.enums.SugarIntake;
 import cloud.anzaanza.antiagingdna.entity.enums.WalkDuration;
 import cloud.anzaanza.antiagingdna.entity.enums.WaterIntake;
+import cloud.anzaanza.antiagingdna.repository.DiaryRepository;
 import cloud.anzaanza.antiagingdna.repository.UserRepository;
 import cloud.anzaanza.antiagingdna.service.AuthService;
 import cloud.anzaanza.antiagingdna.service.DiaryService;
@@ -31,6 +32,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -41,8 +43,14 @@ import org.springframework.stereotype.Component;
  * 개발용 시드 계정 — FE backend-backlog.md #17, 2026-08-17 결정("운영 DB에 시드 계정 심기").
  *
  * <p>가입자가 아직 없는 단계라 운영 DB에 직접 심어도 실사용자 데이터와 섞일 위험이 없다는
- * 판단에 따른 것이다. 부팅마다 실행되지만 {@link #LOGIN_ID} 계정이 이미 있으면 그냥
- * 끝난다 — 매번 다시 심지 않는다.
+ * 판단에 따른 것이다. 부팅마다 실행되지만 {@link #LOGIN_ID} 계정과 {@link #SEED_DAYS}일치
+ * 일지가 이미 있으면 그냥 끝난다 — 매번 다시 심지 않는다.
+ *
+ * <p>계정 존재 여부가 아니라 <b>날짜 하나하나의 존재 여부</b>로 재실행 가능하게 만든다.
+ * 가입은 커밋됐는데 일지 14건 중 일부만 쓰고 프로세스가 죽는 경우(배포 재시작이 매번
+ * 일어나는 단일 컨테이너 운영 구조에서 실제로 있을 수 있다) — 계정 존재만 보고 끝냈다면
+ * 그 계정은 영영 일부 날짜가 빈 채로 남는다. 날짜 단위로 확인하면 다음 부팅이 빠진 날만
+ * 채우고 끝난다.
  *
  * <p>손으로 SQL 을 심지 않고 {@link AuthService}/{@link DiaryService} 를 그대로 호출한다.
  * 비밀번호 해시·검증·day-0 채점 등 가입 경로의 규칙을 다시 만들지 않기 위해서다.
@@ -61,14 +69,87 @@ public class DemoAccountSeeder implements ApplicationRunner {
     /** FE 가 캘린더·주간 그래프·연속 기록일을 확인할 수 있을 만큼의 길이 */
     private static final int SEED_DAYS = 14;
 
+    /**
+     * 하루치 일지 3종. 매일 같은 값이면 캘린더·주간 그래프가 평평한 직선으로만 보여서 화면
+     * 확인에 쓸모가 없다 — 값 자체에 의미를 담진 않는다(진짜 사용자 패턴을 흉내내려는 것이
+     * 아니라 화면에 변화가 보이게 하는 것이 목적).
+     */
+    private static final List<DiaryRequest> DIARY_VARIANTS = List.of(
+            new DiaryRequest(
+                    5,
+                    LocalTime.of(23, 30),
+                    LocalTime.of(7, 0),
+                    SleepLatency.WITHIN_15,
+                    5,
+                    SugarIntake.NONE,
+                    CaffeineCups.NONE,
+                    CaffeineLastTime.MORNING,
+                    WaterIntake.EIGHT_OR_MORE,
+                    true,
+                    ExerciseDuration.ABOUT_30,
+                    ExerciseType.WALKING,
+                    SittingHours.UNDER_4,
+                    3,
+                    MoodRecovery.ENOUGH,
+                    SocialContact.FREQUENT,
+                    3,
+                    WalkDuration.UNDER_30,
+                    ScreenTime.TWO_TO_FOUR),
+            new DiaryRequest(
+                    4,
+                    LocalTime.of(0, 15),
+                    LocalTime.of(7, 30),
+                    SleepLatency.WITHIN_30,
+                    4,
+                    SugarIntake.ONE_TO_TWO,
+                    CaffeineCups.ONE_TO_TWO,
+                    CaffeineLastTime.AFTERNOON,
+                    WaterIntake.SIX_TO_SEVEN,
+                    true,
+                    ExerciseDuration.ABOUT_60,
+                    ExerciseType.AEROBIC,
+                    SittingHours.FOUR_TO_EIGHT,
+                    5,
+                    MoodRecovery.BRIEF,
+                    SocialContact.BRIEF,
+                    2,
+                    WalkDuration.THIRTY_TO_60,
+                    ScreenTime.FOUR_TO_SIX),
+            new DiaryRequest(
+                    3,
+                    LocalTime.of(1, 0),
+                    LocalTime.of(8, 0),
+                    SleepLatency.OVER_60,
+                    3,
+                    SugarIntake.THREE_OR_MORE,
+                    CaffeineCups.THREE_TO_FOUR,
+                    CaffeineLastTime.EVENING,
+                    WaterIntake.THREE_TO_FIVE,
+                    false,
+                    null,
+                    null,
+                    SittingHours.EIGHT_TO_TEN,
+                    7,
+                    MoodRecovery.NONE,
+                    SocialContact.RARELY,
+                    2,
+                    WalkDuration.OVER_2_HOURS,
+                    ScreenTime.OVER_6));
+
     private final UserRepository userRepository;
+    private final DiaryRepository diaryRepository;
     private final AuthService authService;
     private final DiaryService diaryService;
     private final Clock clock;
 
     public DemoAccountSeeder(
-            UserRepository userRepository, AuthService authService, DiaryService diaryService, Clock clock) {
+            UserRepository userRepository,
+            DiaryRepository diaryRepository,
+            AuthService authService,
+            DiaryService diaryService,
+            Clock clock) {
         this.userRepository = userRepository;
+        this.diaryRepository = diaryRepository;
         this.authService = authService;
         this.diaryService = diaryService;
         this.clock = clock;
@@ -76,14 +157,14 @@ public class DemoAccountSeeder implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        if (userRepository.existsByLoginId(LOGIN_ID)) {
-            return;
-        }
-        User user = authService.signUp(signUpRequest());
+        User user = userRepository.findByLoginId(LOGIN_ID).orElseGet(() -> authService.signUp(signUpRequest()));
 
         LocalDate today = LocalDate.now(clock);
         for (int daysAgo = SEED_DAYS - 1; daysAgo >= 0; daysAgo--) {
-            diaryService.save(user.getId(), today.minusDays(daysAgo), diaryFor(daysAgo));
+            LocalDate date = today.minusDays(daysAgo);
+            if (!diaryRepository.existsByAuthorIdAndLogDate(user.getId(), date)) {
+                diaryService.save(user.getId(), date, DIARY_VARIANTS.get(daysAgo % DIARY_VARIANTS.size()));
+            }
         }
     }
 
@@ -118,57 +199,5 @@ public class DemoAccountSeeder implements ApplicationRunner {
                 3,
                 4,
                 3);
-    }
-
-    /**
-     * 하루치 일지를 지어낸다. 매일 같은 값이면 캘린더·주간 그래프가 평평한 직선으로만
-     * 보여서 화면 확인에 쓸모가 없다 — {@code daysAgo} 로 몇 가지 값을 돌려가며 자연스러운
-     * 굴곡을 만든다. 값 자체에 의미를 담진 않는다(진짜 사용자 패턴을 흉내내려는 것이 아니라
-     * 화면에 변화가 보이게 하는 것이 목적이다).
-     */
-    private static DiaryRequest diaryFor(int daysAgo) {
-        boolean exercised = daysAgo % 2 == 0;
-        return new DiaryRequest(
-                3 + (daysAgo % 3), // conditionLevel 3~5
-                daysAgo % 2 == 0 ? LocalTime.of(23, 30) : LocalTime.of(0, 15),
-                LocalTime.of(7, daysAgo % 2 == 0 ? 0 : 30),
-                daysAgo % 2 == 0 ? SleepLatency.WITHIN_15 : SleepLatency.WITHIN_30,
-                3 + (daysAgo % 3), // sleepSatisfaction 3~5
-                daysAgo % 2 == 0 ? SugarIntake.NONE : SugarIntake.ONE_TO_TWO,
-                switch (daysAgo % 3) {
-                    case 0 -> CaffeineCups.NONE;
-                    case 1 -> CaffeineCups.ONE_TO_TWO;
-                    default -> CaffeineCups.THREE_TO_FOUR;
-                },
-                daysAgo % 2 == 0 ? CaffeineLastTime.MORNING : CaffeineLastTime.AFTERNOON,
-                switch (daysAgo % 3) {
-                    case 0 -> WaterIntake.THREE_TO_FIVE;
-                    case 1 -> WaterIntake.SIX_TO_SEVEN;
-                    default -> WaterIntake.EIGHT_OR_MORE;
-                },
-                exercised,
-                exercised ? (daysAgo % 2 == 0 ? ExerciseDuration.ABOUT_30 : ExerciseDuration.ABOUT_60) : null,
-                exercised
-                        ? switch (daysAgo % 3) {
-                            case 0 -> ExerciseType.WALKING;
-                            case 1 -> ExerciseType.AEROBIC;
-                            default -> ExerciseType.STRENGTH;
-                        }
-                        : null,
-                daysAgo % 2 == 0 ? SittingHours.UNDER_4 : SittingHours.FOUR_TO_EIGHT,
-                3 + (daysAgo % 5), // stressLevel 3~7
-                switch (daysAgo % 3) {
-                    case 0 -> MoodRecovery.NONE;
-                    case 1 -> MoodRecovery.BRIEF;
-                    default -> MoodRecovery.ENOUGH;
-                },
-                switch (daysAgo % 3) {
-                    case 0 -> SocialContact.RARELY;
-                    case 1 -> SocialContact.BRIEF;
-                    default -> SocialContact.FREQUENT;
-                },
-                2 + (daysAgo % 2), // mealCount 2~3
-                daysAgo % 2 == 0 ? WalkDuration.UNDER_30 : WalkDuration.THIRTY_TO_60,
-                daysAgo % 2 == 0 ? ScreenTime.TWO_TO_FOUR : ScreenTime.FOUR_TO_SIX);
     }
 }
