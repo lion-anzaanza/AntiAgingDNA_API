@@ -27,6 +27,12 @@ dependencies {
 	// 토큰 발급도 같은 모듈의 NimbusJwtEncoder 를 쓴다 (별도 JWT 라이브러리 불필요).
 	implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0'
+	// 날씨 API 호출(service/weather/KmaWeatherClient) 용 RestClient.Builder 빈 — Boot 4 는
+	// 자동설정을 모듈별로 쪼개서, starter-web 만으로는 RestClientAutoConfiguration 이 안
+	// 딸려온다(flyway-core 와 같은 함정). @WebMvcTest 슬라이스는 이 빈이 필요 없어 로컬에서는
+	// 안 잡히고, 전체 컨텍스트를 띄우는 통합 테스트(Docker 필요)에서만 NoSuchBeanDefinitionException
+	// 으로 드러난다 — CI 에서 처음 발견됨.
+	implementation 'org.springframework.boot:spring-boot-starter-restclient'
 	// 스키마 단일 소스. ddl-auto=validate 와 함께 쓴다 (src/main/resources/db/migration)
 	// spring-boot-flyway 가 반드시 있어야 한다 — Spring Boot 4 는 자동설정을 모듈별로
 	// 분리해서, flyway-core 만 넣으면 라이브러리는 올라가지만 마이그레이션이 실행되지 않는다.
