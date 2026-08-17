@@ -117,6 +117,24 @@ class AuthControllerTest {
     }
 
     @Test
+    void 닉네임이_한_글자면_400_이다() throws Exception {
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(signUpRequest("password1234", "안"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.nickname").isNotEmpty());
+    }
+
+    @Test
+    void 닉네임에_특수문자가_있으면_400_이다() throws Exception {
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(signUpRequest("password1234", "안자!!"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.nickname").isNotEmpty());
+    }
+
+    @Test
     void 이메일이_중복이면_409_다() throws Exception {
         willThrow(new EmailAlreadyUsedException("nosleep@gmail.com"))
                 .given(authService)
@@ -283,6 +301,10 @@ class AuthControllerTest {
             """;
 
     private static SignUpRequest signUpRequest(String password) {
+        return signUpRequest(password, "안자안자");
+    }
+
+    private static SignUpRequest signUpRequest(String password, String nickname) {
         Map<AgreementType, Boolean> agreements = new EnumMap<>(AgreementType.class);
         for (AgreementType type : AgreementType.values()) {
             agreements.put(type, true);
@@ -291,7 +313,7 @@ class AuthControllerTest {
                 "nosleep_dev",
                 "nosleep@gmail.com",
                 password,
-                "안자안자",
+                nickname,
                 2002,
                 new DiagnosisRequest(
                         SleepType.MORNING,
