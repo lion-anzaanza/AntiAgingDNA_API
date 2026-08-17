@@ -87,4 +87,12 @@ jobs:
               -e JWT_SECRET=${{ secrets.JWT_SECRET }} \
               -e WEATHER_API_KEY=${{ secrets.WEATHER_API_KEY }} \
               ${{ secrets.DOCKERHUB_USERNAME }}/antiagingdna:latest
-            docker image prune -a -f
+            docker image prune -a -f || true # 정리 실패로 이미 뜬 배포를 실패 처리하지 않는다
+
+      # 2026-08-17 사고의 교훈: "docker run 이 성공"과 "앱이 실제로 뜸"은 다르다(예:
+      # Flyway validate 실패로 크래시 루프). GitHub Actions 초록불만 보고 배포됐다고
+      # 믿지 않도록, 컨테이너가 아니라 실제 엔드포인트를 직접 호출해 확인한다.
+      - name: Verify deployment
+        run: |
+          curl --fail --retry 10 --retry-delay 5 --retry-connrefused \
+            https://antiaging-dna.anzaanza.cloud/v3/api-docs
