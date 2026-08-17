@@ -99,6 +99,17 @@ curl https://antiaging-dna.anzaanza.cloud/health     # → {"status":"ok"}
 - 이미지 태그: `latest` 와 커밋 SHA 두 개. 롤백은 SHA 태그로 `docker run` 하면 된다.
 - 멀티아키(amd64/arm64) 빌드라 QEMU 에뮬레이션 탓에 **1회 배포에 8~10분** 걸린다.
 
+> **사고 이력 — 2026-08-17, 디스크 부족으로 5회 배포가 조용히 무효화됨**: EC2 루트
+> 볼륨이 8GB뿐인데 매 배포마다 새 멀티아키 이미지가 쌓여 100% 찼다. `docker pull`이
+> "no space left on device"로 실패했지만 배포 스크립트에 `set -e`가 없어서 이어지는
+> `stop`/`rm`/`run`이 **로컬에 남아있던 옛 이미지**로 "성공"해버렸다. GitHub Actions는
+> 계속 초록불이었고, 실제로는 PR #7~#10(5~8차 회신)이 최소 5회 연속 운영에 반영되지
+> 않은 채로 있었다 — FE가 여러 번 신고했는데도 워크플로 상태만 보고 "배포 완료"로
+> 잘못 확인해준 적이 있다. **교훈: 배포 성공 여부는 GitHub Actions 상태가 아니라
+> `GET /v3/api-docs`(또는 실제 엔드포인트 호출)로 운영 서버에서 직접 확인할 것.**
+> 조치: `docker system prune -a -f`로 1.77GB 회수(볼륨은 안 건드림, MySQL 데이터 무관),
+> `deploy.yml`에 `set -e` + 배포 끝마다 `docker image prune -a -f` 추가해 재발을 막았다.
+
 ## Credentials
 
 | 위치 | 내용 |

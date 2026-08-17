@@ -64,6 +64,11 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
+      # 2026-08-17 사고: 서버 디스크가 꽉 차서 docker pull이 "no space left on device"로
+      # 실패했는데, set -e 가 없어서 스크립트가 그대로 이어져 stop/rm/run 이 로컬에 남아있던
+      # 옛 이미지로 "성공"해버렸다. GitHub Actions 는 배포를 초록불로 표시했지만 실제로는
+      # 여러 차례(최소 5회) 배포가 반영되지 않았다 — set -e 로 pull 실패 시 작업 자체를
+      # 실패시키고, 매 배포 끝에 안 쓰는 이미지를 정리해 디스크가 다시 차지 않게 한다.
       - uses: appleboy/ssh-action@v1
         with:
           host: 54.210.141.169
@@ -71,6 +76,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
+            set -e
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/antiagingdna:latest
             docker stop antiagingdna || true
             docker rm antiagingdna || true
@@ -81,3 +87,12 @@ jobs:
               -e JWT_SECRET=${{ secrets.JWT_SECRET }} \
               -e WEATHER_API_KEY=${{ secrets.WEATHER_API_KEY }} \
               ${{ secrets.DOCKERHUB_USERNAME }}/antiagingdna:latest
+            docker image prune -a -f || true # 정리 실패로 이미 뜬 배포를 실패 처리하지 않는다
+
+      # 2026-08-17 사고의 교훈: "docker run 이 성공"과 "앱이 실제로 뜸"은 다르다(예:
+      # Flyway validate 실패로 크래시 루프). GitHub Actions 초록불만 보고 배포됐다고
+      # 믿지 않도록, 컨테이너가 아니라 실제 엔드포인트를 직접 호출해 확인한다.
+      - name: Verify deployment
+        run: |
+          curl --fail --retry 10 --retry-delay 5 --retry-connrefused \
+            https://antiaging-dna.anzaanza.cloud/v3/api-docs
