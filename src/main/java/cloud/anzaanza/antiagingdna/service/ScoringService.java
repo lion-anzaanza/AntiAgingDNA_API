@@ -2,6 +2,7 @@ package cloud.anzaanza.antiagingdna.service;
 
 import cloud.anzaanza.antiagingdna.config.ScoringProperties;
 import cloud.anzaanza.antiagingdna.entity.DailyScore;
+import cloud.anzaanza.antiagingdna.entity.Diary;
 import cloud.anzaanza.antiagingdna.entity.DnaInfo;
 import cloud.anzaanza.antiagingdna.exception.DiagnosisNotFoundException;
 import cloud.anzaanza.antiagingdna.repository.DailyScoreRepository;
@@ -13,6 +14,7 @@ import cloud.anzaanza.antiagingdna.service.scoring.BaselineCalculator;
 import cloud.anzaanza.antiagingdna.service.scoring.DiaryScorer;
 import cloud.anzaanza.antiagingdna.service.scoring.ScoreCombiner;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -45,16 +47,19 @@ public class ScoringService {
     private final DiaryRepository diaryRepository;
     private final DailyScoreRepository dailyScoreRepository;
     private final ScoringProperties properties;
+    private final Clock clock;
 
     public ScoringService(
             DnaInfoRepository dnaInfoRepository,
             DiaryRepository diaryRepository,
             DailyScoreRepository dailyScoreRepository,
-            ScoringProperties properties) {
+            ScoringProperties properties,
+            Clock clock) {
         this.dnaInfoRepository = dnaInfoRepository;
         this.diaryRepository = diaryRepository;
         this.dailyScoreRepository = dailyScoreRepository;
         this.properties = properties;
+        this.clock = clock;
     }
 
     /**
@@ -77,10 +82,26 @@ public class ScoringService {
     @Transactional
     public DailyScore recalculate(DnaInfo dna, LocalDate date) {
         String userId = dna.getUser().getId();
+        String existingId = dailyScoreRepository
+                .findByUserIdAndScoreDate(userId, date)
+                .map(DailyScore::getId)
+                .orElse(null);
+        Optional<Diary> diaryEntry = diaryRepository.findByAuthorIdAndLogDate(userId, date);
+        return dailyScoreRepository.save(compute(dna, date, existingId, diaryEntry));
+    }
+
+    /**
+     * 그 날짜의 점수를 계산만 한다 — 저장은 호출부의 몫이다.
+     *
+     * <p>{@code existingId}·{@code diaryEntry} 를 인자로 받는 이유 — 호출부(
+     * {@link #recalculate}·{@link #scoreOn})가 저장 여부를 결정하려면 이미 기존 행·일지
+     * 유무를 알아야 하므로, 같은 조회를 여기서 또 하지 않는다.
+     */
+    private DailyScore compute(DnaInfo dna, LocalDate date, String existingId, Optional<Diary> diaryEntry) {
+        String userId = dna.getUser().getId();
 
         AreaScores baseline = BaselineCalculator.of(dna);
-        AreaScores today = diaryRepository
-                .findByAuthorIdAndLogDate(userId, date)
+        AreaScores today = diaryEntry
                 .map(diary -> DiaryScorer.of(diary, dna))
                 .orElseGet(() -> AreaScores.builder().build());
 
@@ -93,10 +114,9 @@ public class ScoringService {
             throw new IllegalStateException("표시 점수를 산출할 근거가 없다: user=" + userId + " date=" + date);
         }
 
-        Optional<DailyScore> existing = dailyScoreRepository.findByUserIdAndScoreDate(userId, date);
-        return dailyScoreRepository.save(DailyScore.builder()
+        return DailyScore.builder()
                 // 있으면 같은 행을 갱신한다. 파생 캐시라 덮어써도 잃는 원본이 없다.
-                .id(existing.map(DailyScore::getId).orElse(null))
+                .id(existingId)
                 .user(dna.getUser())
                 .scoreDate(date)
                 .physicalScore(AreaScores.toColumn(today.get(Area.PHYSICAL)))
@@ -107,7 +127,7 @@ public class ScoringService {
                 .dailyTotal(AreaScores.toColumn(dailyTotal))
                 .displayTotal(AreaScores.toColumn(displayTotal))
                 .scoringVersion(properties.version())
-                .build());
+                .build();
     }
 
     /**
@@ -143,18 +163,36 @@ public class ScoringService {
     }
 
     /**
-     * 그날의 점수를 돌려준다. 행이 없으면 그 자리에서 산출해 저장한다(read-through).
+     * 그날의 점수를 돌려준다. 일지가 있거나 오늘 날짜라면 행이 없을 때 그 자리에서 산출해
+     * 저장한다(read-through) — 결과가 같은 계산이라 몇 번을 불러도 값이 변하지 않으므로,
+     * 실제 기록이 있는 날과 홈 화면이 매번 조회하는 오늘은 캐시해 둘 가치가 있다.
      *
-     * <p>일지를 쓰지 않은 날에도 표시 점수는 존재해야 하는데(기획 §C), 그 행을 만들어 줄 주체가
-     * 필요하다. 야간 배치를 두는 대신 조회 시점에 채운다 — 결과가 같은 계산이라 몇 번을 불러도
-     * 값이 변하지 않는다. GET 이 쓰기를 하는 건 캐시 채우기이지 상태 변경이 아니다.
+     * <p><b>그 외(일지 없는 과거·미래) 날짜는 저장하지 않는다</b> — 2026-08-17,
+     * FE backend-backlog.md #31. 원래는 무조건 저장했다("일지를 쓰지 않은 날에도 표시
+     * 점수는 존재해야 한다", 기획 §C). 그런데 그 표시 점수는 항상 baseline 으로부터 다시
+     * 계산 가능한 값이라 저장이 필수가 아니었고, 캘린더처럼 조회 API 를 여러 날짜에 반복
+     * 호출하는 화면에서 단순 조회가 "그 사용자의 그 달이 통째로 기록 있는 달"이 되는 부작용만
+     * 낳았다(되돌릴 방법도 없었다). 오늘만 예외로 남긴 이유는 가입 당일(day-0)·홈 오브 카드가
+     * 원래도 이 캐시에 기대고 있던 자리라, 그 경로까지 매번 재계산하게 하면 홈 화면의 흔한
+     * 반복 호출마다 불필요하게 비용이 커진다.
      */
     @Transactional
     public DailyScore scoreOn(String userId, LocalDate date) {
         rescoreIfStale(userId);
-        return dailyScoreRepository
-                .findByUserIdAndScoreDate(userId, date)
-                .orElseGet(() -> recalculate(userId, date));
+        Optional<DailyScore> existing = dailyScoreRepository.findByUserIdAndScoreDate(userId, date);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
+        DnaInfo dna = dnaInfoRepository
+                .findById(userId)
+                .orElseThrow(() -> new DiagnosisNotFoundException(userId));
+        Optional<Diary> diaryEntry = diaryRepository.findByAuthorIdAndLogDate(userId, date);
+        DailyScore computed = compute(dna, date, null, diaryEntry);
+        if (diaryEntry.isPresent() || date.equals(LocalDate.now(clock))) {
+            return dailyScoreRepository.save(computed);
+        }
+        return computed;
     }
 
     /** 구간 조회. 비어 있는 날짜는 채우지 않는다 — 추이 그래프는 기록이 있는 날만 그리면 된다 */

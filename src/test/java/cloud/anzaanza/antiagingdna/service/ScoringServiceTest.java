@@ -31,8 +31,10 @@ import cloud.anzaanza.antiagingdna.repository.DailyScoreRepository;
 import cloud.anzaanza.antiagingdna.repository.DiaryRepository;
 import cloud.anzaanza.antiagingdna.repository.DnaInfoRepository;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,6 +63,9 @@ class ScoringServiceTest {
             7,
             new GradeThresholds(new BigDecimal("70"), new BigDecimal("40")));
 
+    private static final Clock CLOCK =
+            Clock.fixed(TODAY.atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant(), ZoneId.of("Asia/Seoul"));
+
     @Mock private DnaInfoRepository dnaInfoRepository;
     @Mock private DiaryRepository diaryRepository;
     @Mock private DailyScoreRepository dailyScoreRepository;
@@ -70,7 +75,7 @@ class ScoringServiceTest {
     @BeforeEach
     void setUp() {
         scoringService =
-                new ScoringService(dnaInfoRepository, diaryRepository, dailyScoreRepository, PROPERTIES);
+                new ScoringService(dnaInfoRepository, diaryRepository, dailyScoreRepository, PROPERTIES, CLOCK);
     }
 
     private static final User USER = User.builder()
@@ -234,6 +239,60 @@ class ScoringServiceTest {
                 .willReturn(List.of());
 
         assertThat(scoringService.scoreOn(USER_ID, TODAY).getDisplayTotal()).isNotNull();
+    }
+
+    /**
+     * #31 — 일지가 없는 <b>과거</b> 날짜는 조회만 해서는 행을 만들지 않는다
+     * (FE backend-backlog.md #31, 캘린더가 빈 날들을 조회만 해도 그 달이 전부
+     * "기록 있는 달"이 되던 문제).
+     */
+    @Test
+    void 일지가_없는_과거_날짜는_조회해도_저장하지_않는다() {
+        LocalDate pastDate = TODAY.minusDays(10);
+        givenDna();
+        given(dailyScoreRepository.findByUserIdAndScoreDate(USER_ID, pastDate)).willReturn(Optional.empty());
+        given(diaryRepository.findByAuthorIdAndLogDate(USER_ID, pastDate)).willReturn(Optional.empty());
+        given(dailyScoreRepository.findByUserIdAndScoreDateBetweenOrderByScoreDateAsc(
+                        anyString(), any(), any()))
+                .willReturn(List.of());
+
+        DailyScore result = scoringService.scoreOn(USER_ID, pastDate);
+
+        assertThat(result.getDisplayTotal()).isNotNull();
+        verify(dailyScoreRepository, never()).save(any(DailyScore.class));
+    }
+
+    /** 오늘 날짜는 일지가 없어도 저장한다 — 홈 오브 카드가 매번 조회하는 자리라 캐시해 둘 가치가 있다 */
+    @Test
+    void 오늘_날짜는_일지가_없어도_조회_시점에_저장된다() {
+        givenDna();
+        givenSaveReturnsArgument();
+        given(dailyScoreRepository.findByUserIdAndScoreDate(USER_ID, TODAY)).willReturn(Optional.empty());
+        given(diaryRepository.findByAuthorIdAndLogDate(USER_ID, TODAY)).willReturn(Optional.empty());
+        given(dailyScoreRepository.findByUserIdAndScoreDateBetweenOrderByScoreDateAsc(
+                        anyString(), any(), any()))
+                .willReturn(List.of());
+
+        scoringService.scoreOn(USER_ID, TODAY);
+
+        verify(dailyScoreRepository).save(any(DailyScore.class));
+    }
+
+    /** 일지가 있는 날짜는 그대로 캐시해 둔다 — read-through 는 실제 기록이 있는 날에만 적용된다 */
+    @Test
+    void 일지가_있는_과거_날짜는_조회_시점에_저장된다() {
+        LocalDate pastDate = TODAY.minusDays(10);
+        givenDna();
+        givenSaveReturnsArgument();
+        given(dailyScoreRepository.findByUserIdAndScoreDate(USER_ID, pastDate)).willReturn(Optional.empty());
+        given(diaryRepository.findByAuthorIdAndLogDate(USER_ID, pastDate)).willReturn(Optional.of(diary()));
+        given(dailyScoreRepository.findByUserIdAndScoreDateBetweenOrderByScoreDateAsc(
+                        anyString(), any(), any()))
+                .willReturn(List.of());
+
+        scoringService.scoreOn(USER_ID, pastDate);
+
+        verify(dailyScoreRepository).save(any(DailyScore.class));
     }
 
     @Test

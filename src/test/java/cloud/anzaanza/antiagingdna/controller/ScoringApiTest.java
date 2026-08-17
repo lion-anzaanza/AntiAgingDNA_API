@@ -159,9 +159,21 @@ class ScoringApiTest {
                 .andExpect(jsonPath("$.date").value("2026-08-10"))
                 .andExpect(jsonPath("$.displayTotal").value(93.75))
                 .andExpect(jsonPath("$.grade").value("GOOD"))
+                .andExpect(jsonPath("$.dailyGrade").doesNotExist())
                 .andExpect(jsonPath("$.orbState").value("GOOD_HIGH"))
                 .andExpect(jsonPath("$.dailyTotal").doesNotExist())
                 .andExpect(jsonPath("$.scoringVersion").value("test-v1"));
+    }
+
+    /** #32 — grade 는 baseline 이 섞인 displayTotal 기준이라 그날 기록과 반대로 보일 수 있다. dailyGrade 는 그날만의 기준 */
+    @Test
+    void 일지가_있는_날은_dailyGrade가_그날_기록_기준으로_따로_나온다() throws Exception {
+        given(scoringService.scoreOn("user-1", TODAY)).willReturn(score(TODAY, "30.00", "93.75"));
+
+        mockMvc.perform(get("/api/scores/today").header("Authorization", "Bearer " + token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.grade").value("GOOD")) // displayTotal 93.75 기준
+                .andExpect(jsonPath("$.dailyGrade").value("DANGER")); // dailyTotal 30.00 기준 — 그날은 나빴다
     }
 
     @Test
@@ -181,7 +193,8 @@ class ScoringApiTest {
                         .header("Authorization", "Bearer " + token()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].dailyTotal").value(60.00));
+                .andExpect(jsonPath("$[0].dailyTotal").value(60.00))
+                .andExpect(jsonPath("$[0].dailyGrade").value("WARN"));
     }
 
     @Test
