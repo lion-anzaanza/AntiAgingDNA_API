@@ -168,6 +168,26 @@ class ScoringPersistenceIntegrationTest extends IntegrationTest {
                 .isNotEqualByComparingTo(beforeBackfill);
     }
 
+    /**
+     * FE backend-backlog.md #31 재현 — 일지 없는 날짜를 단일 조회만 해도 그 날짜가 영구
+     * 기록으로 남던 문제. 캘린더가 한 달을 그리며 단일 조회를 반복하면 그 달 전체가
+     * "기록 있는 달"이 되고 되돌릴 방법도 없었다.
+     */
+    @Test
+    void 일지_없는_날짜는_단일_조회해도_구간_조회에_나타나지_않는다() {
+        User user = newUser();
+        LocalDate farPast = today().minusYears(1);
+
+        scoringService.scoreOn(user.getId(), farPast);
+
+        assertThat(dailyScoreRepository.findByUserIdAndScoreDate(user.getId(), farPast))
+                .describedAs("일지 없는 날짜는 조회만으로 행이 생기면 안 된다")
+                .isEmpty();
+        assertThat(scoringService.scoresBetween(user.getId(), farPast, farPast))
+                .describedAs("생기지 않았으니 구간 조회에도 나타나지 않는다")
+                .isEmpty();
+    }
+
     @Test
     void 일지를_지우면_baseline_점수로_돌아간다() {
         User user = newUser();
