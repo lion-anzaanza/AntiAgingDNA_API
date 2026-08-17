@@ -13,6 +13,7 @@ import cloud.anzaanza.antiagingdna.config.ScoringProperties;
 import cloud.anzaanza.antiagingdna.config.SecurityConfig;
 import cloud.anzaanza.antiagingdna.dto.DnaInfoResponse;
 import cloud.anzaanza.antiagingdna.entity.DailyScore;
+import cloud.anzaanza.antiagingdna.entity.Diary;
 import cloud.anzaanza.antiagingdna.entity.DnaInfo;
 import cloud.anzaanza.antiagingdna.entity.User;
 import cloud.anzaanza.antiagingdna.entity.enums.DrinkFrequency;
@@ -21,7 +22,9 @@ import cloud.anzaanza.antiagingdna.entity.enums.LifeRhythm;
 import cloud.anzaanza.antiagingdna.entity.enums.SensitivityLevel;
 import cloud.anzaanza.antiagingdna.entity.enums.SleepType;
 import cloud.anzaanza.antiagingdna.entity.enums.SmokingStatus;
+import cloud.anzaanza.antiagingdna.entity.enums.WaterIntake;
 import cloud.anzaanza.antiagingdna.exception.DiagnosisNotFoundException;
+import cloud.anzaanza.antiagingdna.service.DiaryService;
 import cloud.anzaanza.antiagingdna.service.DnaInfoService;
 import cloud.anzaanza.antiagingdna.service.ScoringService;
 import cloud.anzaanza.antiagingdna.service.TokenService;
@@ -30,6 +33,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -85,6 +89,7 @@ class ScoringApiTest {
 
     @MockitoBean private DnaInfoService dnaInfoService;
     @MockitoBean private ScoringService scoringService;
+    @MockitoBean private DiaryService diaryService;
 
     private MockMvc mockMvc;
 
@@ -193,6 +198,42 @@ class ScoringApiTest {
         mockMvc.perform(get("/api/scores")
                         .param("from", "2020-01-01")
                         .param("to", "2026-08-10")
+                        .header("Authorization", "Bearer " + token()))
+                .andExpect(status().isBadRequest());
+    }
+
+    // ── 항목별 주간 추이 (수면·수분, FE backend-backlog #11/#27) ────
+
+    @Test
+    void 항목_구간_조회는_수면과_수분을_점수와_등급으로_함께_준다() throws Exception {
+        Diary diary = Diary.builder()
+                .logDate(TODAY)
+                .sleepStartedAt(LocalTime.of(23, 0))
+                .sleepEndedAt(LocalTime.of(7, 0)) // 8h → 100 → GOOD
+                .waterIntake(WaterIntake.THREE_TO_FIVE) // 60 → WARN
+                .build();
+        given(diaryService.between("user-1", TODAY.minusDays(2), TODAY)).willReturn(List.of(diary));
+
+        mockMvc.perform(get("/api/scores/items")
+                        .param("from", "2026-08-08")
+                        .param("to", "2026-08-10")
+                        .header("Authorization", "Bearer " + token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].date").value("2026-08-10"))
+                .andExpect(jsonPath("$[0].sleepMinutes").value(480))
+                .andExpect(jsonPath("$[0].sleepScore").value(100.0))
+                .andExpect(jsonPath("$[0].sleepGrade").value("GOOD"))
+                .andExpect(jsonPath("$[0].waterIntake").value("THREE_TO_FIVE"))
+                .andExpect(jsonPath("$[0].waterScore").value(60.0))
+                .andExpect(jsonPath("$[0].waterGrade").value("WARN"));
+    }
+
+    @Test
+    void 항목_구간_조회도_from_이_to_보다_늦으면_400_이다() throws Exception {
+        mockMvc.perform(get("/api/scores/items")
+                        .param("from", "2026-08-10")
+                        .param("to", "2026-08-08")
                         .header("Authorization", "Bearer " + token()))
                 .andExpect(status().isBadRequest());
     }
