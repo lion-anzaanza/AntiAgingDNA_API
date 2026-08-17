@@ -79,4 +79,5 @@ jobs:
               -e DB_USERNAME=${{ secrets.DB_USERNAME }} \
               -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
               -e JWT_SECRET=${{ secrets.JWT_SECRET }} \
+              -e WEATHER_API_KEY=${{ secrets.WEATHER_API_KEY }} \
               ${{ secrets.DOCKERHUB_USERNAME }}/antiagingdna:latest

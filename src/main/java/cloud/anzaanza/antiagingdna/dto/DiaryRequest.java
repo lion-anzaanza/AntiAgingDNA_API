@@ -15,9 +15,12 @@ import cloud.anzaanza.antiagingdna.entity.enums.SugarIntake;
 import cloud.anzaanza.antiagingdna.entity.enums.WalkDuration;
 import cloud.anzaanza.antiagingdna.entity.enums.WaterIntake;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
@@ -70,7 +73,15 @@ public record DiaryRequest(
         // ── 참고 항목 (비채점) ───────────────────────────────────
         @Min(0) @Max(5) Integer mealCount,
         WalkDuration walkDuration,
-        ScreenTime screenTime) {
+        ScreenTime screenTime,
+
+        // ── 날씨 (자동 기록, FE backend-backlog #12) ──────────────
+        // 둘 다 있어야 조회한다 — 하나만 오면 위경도 자체가 불완전하니 결측으로 둔다
+        // (DiaryService.save). 지명(locationLabel)은 서버가 좌표로 지어내지 않는다 —
+        // 클라이언트가 기기 위치 서비스로 얻은 표기를 그대로 보낸다.
+        @DecimalMin("-90") @DecimalMax("90") @Schema(example = "37.5665") Double lat,
+        @DecimalMin("-180") @DecimalMax("180") @Schema(example = "126.9780") Double lon,
+        @Schema(example = "서울") @Size(max = 64) String weatherLocationLabel) {
 
     /**
      * 운동을 "안 함"으로 보내면서 시간·종류가 함께 오면 그 둘을 버린다.

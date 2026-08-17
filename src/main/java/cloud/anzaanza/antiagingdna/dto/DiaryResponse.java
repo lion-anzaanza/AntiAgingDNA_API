@@ -14,6 +14,8 @@ import cloud.anzaanza.antiagingdna.entity.enums.SugarIntake;
 import cloud.anzaanza.antiagingdna.entity.enums.WalkDuration;
 import cloud.anzaanza.antiagingdna.entity.enums.WaterIntake;
 import cloud.anzaanza.antiagingdna.service.scoring.ItemScores;
+import cloud.anzaanza.antiagingdna.service.weather.WeatherCondition;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -47,6 +49,10 @@ public record DiaryResponse(
         Integer mealCount,
         WalkDuration walkDuration,
         ScreenTime screenTime,
+        BigDecimal weatherTemperature,
+        Integer weatherHumidity,
+        WeatherCondition weatherCondition,
+        String weatherLocationLabel,
         LocalDateTime createdAt,
         LocalDateTime updatedAt) {
 
@@ -74,6 +80,10 @@ public record DiaryResponse(
                 diary.getMealCount(),
                 diary.getWalkDuration(),
                 diary.getScreenTime(),
+                diary.getWeatherTemperature(),
+                diary.getWeatherHumidity(),
+                diary.getWeatherCondition(),
+                diary.getWeatherLocationLabel(),
                 diary.getCreatedAt(),
                 diary.getUpdatedAt());
     }

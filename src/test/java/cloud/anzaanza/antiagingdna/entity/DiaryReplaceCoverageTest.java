@@ -31,8 +31,19 @@ import org.junit.jupiter.api.Test;
  */
 class DiaryReplaceCoverageTest {
 
-    /** 교체 대상이 아닌 필드 — 일지의 정체성과 감사 정보 */
-    private static final List<String> PRESERVED = List.of("id", "author", "logDate");
+    /**
+     * 교체 대상이 아닌 필드 — 일지의 정체성·감사 정보, 그리고 날씨(사용자가 고르는 폼 필드가
+     * 아니라 위경도로 서버가 조회해 {@code recordWeather} 로 따로 붙이는 부가 정보라 이
+     * "폼 필드 통째로 교체" 규칙과 무관하다).
+     */
+    private static final List<String> PRESERVED = List.of(
+            "id",
+            "author",
+            "logDate",
+            "weatherTemperature",
+            "weatherHumidity",
+            "weatherCondition",
+            "weatherLocationLabel");
 
     @Test
     void replaceWith_는_모든_입력_필드를_교체한다() throws Exception {
