@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.text.Normalizer;
 import java.util.Map;
 
 /**
@@ -43,7 +44,10 @@ public record SignUpRequest(
                         regexp = "^(?=.*[A-Za-z])(?=.*\\d).+$",
                         message = "영문과 숫자를 모두 포함해야 합니다")
                 String password,
-        @NotBlank @Size(max = 32) String nickname,
+        @NotBlank
+                @Size(min = NICKNAME_MIN, max = NICKNAME_MAX)
+                @Pattern(regexp = NICKNAME_PATTERN)
+                String nickname,
         @NotNull
                 @Min(1900)
                 @Schema(
@@ -60,9 +64,26 @@ public record SignUpRequest(
                                         + "\"MARKETING\": false, \"AGE_OVER_14\": true}")
                 Map<AgreementType, Boolean> agreements) {
 
+    /**
+     * NFD 로 분해된 한글(자모가 풀린 형태)이 들어와도 같은 글자로 취급한다 — 분해 형태는
+     * {@code @Pattern} 의 {@code 가-힣}(완성형) 범위와 맞지 않아 눈에 똑같이 보이는 닉네임이
+     * 거부될 수 있다. Bean Validation 은 유니코드 정규화를 하지 않으므로 검증 전에 여기서
+     * 맞춘다.
+     */
+    public SignUpRequest {
+        nickname = nickname == null ? null : Normalizer.normalize(nickname, Normalizer.Form.NFC);
+    }
+
     // 아이디 형식 상수 — 가입 검증과 중복 확인(AuthController#checkLoginId)이 같은 규칙을
     // 쓰게 여기 하나만 둔다. 잠정 규칙이라는 사정은 위 Javadoc 참고.
     public static final int LOGIN_ID_MIN = 4;
     public static final int LOGIN_ID_MAX = 32;
     public static final String LOGIN_ID_PATTERN = "^[A-Za-z0-9_]+$";
+
+    // 닉네임 형식 상수 — FE backend-backlog.md #19, 화면에 아직 규칙이 없어 업계 흔한
+    // 기본값으로 잠정 확정(2026-08-17). 한글·영문·숫자만 허용(공백·특수문자 제외), 중복은
+    // 허용한다(로그인 식별자는 loginId 가 따로 있다).
+    public static final int NICKNAME_MIN = 2;
+    public static final int NICKNAME_MAX = 16;
+    public static final String NICKNAME_PATTERN = "^[가-힣A-Za-z0-9]+$";
 }
