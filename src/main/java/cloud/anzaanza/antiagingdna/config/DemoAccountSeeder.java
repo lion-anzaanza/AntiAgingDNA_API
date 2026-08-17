@@ -94,7 +94,10 @@ public class DemoAccountSeeder implements ApplicationRunner {
                     SocialContact.FREQUENT,
                     3,
                     WalkDuration.UNDER_30,
-                    ScreenTime.TWO_TO_FOUR),
+                    ScreenTime.TWO_TO_FOUR,
+                    null,
+                    null,
+                    null),
             new DiaryRequest(
                     4,
                     LocalTime.of(0, 15),
@@ -114,7 +117,10 @@ public class DemoAccountSeeder implements ApplicationRunner {
                     SocialContact.BRIEF,
                     2,
                     WalkDuration.THIRTY_TO_60,
-                    ScreenTime.FOUR_TO_SIX),
+                    ScreenTime.FOUR_TO_SIX,
+                    null,
+                    null,
+                    null),
             new DiaryRequest(
                     3,
                     LocalTime.of(1, 0),
@@ -134,7 +140,10 @@ public class DemoAccountSeeder implements ApplicationRunner {
                     SocialContact.RARELY,
                     2,
                     WalkDuration.OVER_2_HOURS,
-                    ScreenTime.OVER_6));
+                    ScreenTime.OVER_6,
+                    null,
+                    null,
+                    null));
 
     private final UserRepository userRepository;
     private final DiaryRepository diaryRepository;

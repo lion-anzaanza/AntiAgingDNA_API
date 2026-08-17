@@ -245,6 +245,7 @@ class ScoringPersistenceIntegrationTest extends IntegrationTest {
                 6, // 스트레스 → 40.0 → k1.1 → 34.0
                 null,
                 SocialContact.BRIEF, // 60
-                3, null, null);
+                3, null, null,
+                null, null, null);
     }
 }

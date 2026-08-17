@@ -6,8 +6,11 @@ import cloud.anzaanza.antiagingdna.entity.User;
 import cloud.anzaanza.antiagingdna.exception.DiaryNotFoundException;
 import cloud.anzaanza.antiagingdna.repository.DiaryRepository;
 import cloud.anzaanza.antiagingdna.repository.UserRepository;
+import cloud.anzaanza.antiagingdna.service.weather.WeatherService;
+import cloud.anzaanza.antiagingdna.service.weather.WeatherSnapshot;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,14 +32,17 @@ public class DiaryService {
     private final DiaryRepository diaryRepository;
     private final UserRepository userRepository;
     private final ScoringService scoringService;
+    private final WeatherService weatherService;
 
     public DiaryService(
             DiaryRepository diaryRepository,
             UserRepository userRepository,
-            ScoringService scoringService) {
+            ScoringService scoringService,
+            WeatherService weatherService) {
         this.diaryRepository = diaryRepository;
         this.userRepository = userRepository;
         this.scoringService = scoringService;
+        this.weatherService = weatherService;
     }
 
     /**
@@ -52,13 +58,32 @@ public class DiaryService {
                 .findById(userId)
                 .orElseThrow(() -> new BadCredentialsException("존재하지 않는 계정입니다"));
 
-        Diary saved = diaryRepository
-                .findByAuthorIdAndLogDate(userId, date)
-                .map(existing -> {
-                    existing.replaceWith(request.toEntity(author, date));
-                    return existing; // 영속 상태라 변경 감지로 UPDATE 된다
+        Optional<Diary> existing = diaryRepository.findByAuthorIdAndLogDate(userId, date);
+
+        // 날씨는 하루 한 번만 기록한다 — 이미 있으면 그 뒤의 수정이 지우거나 다시 조회하지
+        // 않는다(V3 마이그레이션 의도: 그날 기록된 날씨는 나중에 다시 봐도 그대로다). 위경도가
+        // 없거나 조회에 실패하면 기존 값을 그대로 둔다 — "이번에 없으면 지운다"는 폼 필드
+        // 규칙(replaceWith)과 달리, 날씨는 한 번 붙으면 그 날의 기록으로 고정된다.
+        boolean alreadyRecorded = existing.map(Diary::hasWeather).orElse(false);
+        WeatherSnapshot weather = (!alreadyRecorded && request.lat() != null && request.lon() != null)
+                ? weatherService.lookup(request.lat(), request.lon())
+                : null;
+
+        Diary saved = existing
+                .map(diary -> {
+                    diary.replaceWith(request.toEntity(author, date));
+                    if (weather != null) {
+                        diary.recordWeather(weather, request.weatherLocationLabel());
+                    }
+                    return diary; // 영속 상태라 변경 감지로 UPDATE 된다
                 })
-                .orElseGet(() -> diaryRepository.save(request.toEntity(author, date)));
+                .orElseGet(() -> {
+                    Diary diary = request.toEntity(author, date);
+                    if (weather != null) {
+                        diary.recordWeather(weather, request.weatherLocationLabel());
+                    }
+                    return diaryRepository.save(diary);
+                });
 
         // 재채점은 일지를 다시 조회한다. 같은 트랜잭션이고 JPA 가 쿼리 전에 flush 하므로
         // 방금 쓴 내용이 반영된 상태로 채점된다.

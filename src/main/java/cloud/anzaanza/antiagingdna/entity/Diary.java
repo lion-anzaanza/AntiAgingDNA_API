@@ -12,6 +12,8 @@ import cloud.anzaanza.antiagingdna.entity.enums.SocialContact;
 import cloud.anzaanza.antiagingdna.entity.enums.SugarIntake;
 import cloud.anzaanza.antiagingdna.entity.enums.WalkDuration;
 import cloud.anzaanza.antiagingdna.entity.enums.WaterIntake;
+import cloud.anzaanza.antiagingdna.service.weather.WeatherCondition;
+import cloud.anzaanza.antiagingdna.service.weather.WeatherSnapshot;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -23,6 +25,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import lombok.AccessLevel;
@@ -184,6 +187,25 @@ public class Diary extends BaseTimeEntity {
     @Column(name = "screen_time", length = 32)
     private ScreenTime screenTime;
 
+    // ── 날씨 (자동 기록, FE backend-backlog #12) ────────────────────
+    // 사용자가 고르는 값이 아니라 위경도로 서버가 조회해 붙이는 부가 정보라, replaceWith 의
+    // "폼 필드 통째로 교체" 대상이 아니다 — recordWeather 로 따로 다룬다
+    // (DiaryReplaceCoverageTest 의 PRESERVED 참고).
+    @Column(name = "weather_temperature", precision = 4, scale = 1)
+    private BigDecimal weatherTemperature;
+
+    @Column(name = "weather_humidity")
+    private Integer weatherHumidity;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "weather_condition", length = 32)
+    private WeatherCondition weatherCondition;
+
+    /** 클라이언트가 기기 위치 서비스로 얻어 보낸 표기(예: "서울"). 서버는 좌표로 지명을 만들지 않는다 */
+    @Column(name = "weather_location_label", length = 64)
+    private String weatherLocationLabel;
+
     /**
      * 같은 날짜의 일지를 새 입력으로 <b>통째로</b> 교체한다. {@code id}·{@code author}·
      * {@code logDate}·감사 컬럼은 유지된다.
@@ -216,5 +238,21 @@ public class Diary extends BaseTimeEntity {
         this.mealCount = source.mealCount;
         this.walkDuration = source.walkDuration;
         this.screenTime = source.screenTime;
+    }
+
+    /**
+     * 날씨를 기록한다. {@code weather} 가 {@code null} 이면(위경도 미제공·조회 실패 포함)
+     * 결측으로 지운다 — {@link #replaceWith} 와 같은 "이번에 없으면 지운다" 규칙을 따른다.
+     */
+    public void recordWeather(WeatherSnapshot weather, String locationLabel) {
+        this.weatherTemperature = weather == null ? null : weather.temperature();
+        this.weatherHumidity = weather == null ? null : weather.humidity();
+        this.weatherCondition = weather == null ? null : weather.condition();
+        this.weatherLocationLabel = weather == null ? null : locationLabel;
+    }
+
+    /** 날씨가 이미 기록돼 있는지 — 하루 한 번만 조회하면 되므로 {@code DiaryService.save} 가 재조회 여부를 판단할 때 쓴다 */
+    public boolean hasWeather() {
+        return weatherTemperature != null || weatherHumidity != null || weatherCondition != null;
     }
 }

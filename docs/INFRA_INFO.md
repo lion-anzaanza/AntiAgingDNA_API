@@ -103,7 +103,7 @@ curl https://antiaging-dna.anzaanza.cloud/health     # → {"status":"ok"}
 
 | 위치 | 내용 |
 |---|---|
-| GitHub Secrets | `DOCKERHUB_USERNAME` · `DOCKERHUB_TOKEN` · `EC2_SSH_KEY` · `DB_URL` · `DB_USERNAME` · `DB_PASSWORD` · `JWT_SECRET` |
+| GitHub Secrets | `DOCKERHUB_USERNAME` · `DOCKERHUB_TOKEN` · `EC2_SSH_KEY` · `DB_URL` · `DB_USERNAME` · `DB_PASSWORD` · `JWT_SECRET` · `WEATHER_API_KEY` |
 | 로컬 전용 파일 | SSH/DB 접속 정보. `.gitignore` 의 `*DO_NOT_CUMMIT*` · `*SSH_ONLY*` · `*.pem` · `*.key` 패턴으로 차단 |
 
 > **`JWT_SECRET`** — 액세스 토큰 서명 키(HS256). **32바이트 이상**이어야 하고 없으면 앱이
@@ -112,6 +112,17 @@ curl https://antiaging-dna.anzaanza.cloud/health     # → {"status":"ok"}
 >
 > ```bash
 > gh secret set JWT_SECRET --body "$(openssl rand -base64 48)"
+> ```
+
+> **`WEATHER_API_KEY`** — 공공데이터포털 "기상청_단기예보 조회서비스" 인증키(일지 날씨
+> 자동 기록, FE backend-backlog.md #12). `JWT_SECRET` 과 달리 **없어도 부팅은 정상**이다 —
+> 날씨는 부가 정보라 키가 없으면 `WeatherService` 가 결측으로 처리할 뿐이다
+> (`weather.api-key=${WEATHER_API_KEY:}`, 기본값 빈 문자열). data.go.kr 이 발급하는
+> "URL Encoding" 형태 키를 그대로 넣으면 된다 — `WeatherProperties.decodedApiKey()` 가
+> 한 번 디코딩한 뒤 HTTP 클라이언트가 다시 인코딩하므로 이중 인코딩 걱정 없다.
+>
+> ```bash
+> gh secret set WEATHER_API_KEY --body "<data.go.kr 에서 발급받은 인증키>"
 > ```
 
 > **주의** — `.gitignore` 가 한때 특정 **파일명 하나**(`docs/SSH_ONLY_FOR_LOCAL.txt`)만
