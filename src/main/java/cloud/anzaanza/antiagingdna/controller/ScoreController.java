@@ -2,6 +2,8 @@ package cloud.anzaanza.antiagingdna.controller;
 
 import cloud.anzaanza.antiagingdna.config.ScoringProperties;
 import cloud.anzaanza.antiagingdna.dto.DailyScoreResponse;
+import cloud.anzaanza.antiagingdna.dto.ItemTrendResponse;
+import cloud.anzaanza.antiagingdna.service.DiaryService;
 import cloud.anzaanza.antiagingdna.service.ScoringService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -29,11 +31,14 @@ public class ScoreController {
     private static final int MAX_RANGE_DAYS = 366;
 
     private final ScoringService scoringService;
+    private final DiaryService diaryService;
     private final ScoringProperties properties;
     private final Clock clock;
 
-    public ScoreController(ScoringService scoringService, ScoringProperties properties, Clock clock) {
+    public ScoreController(
+            ScoringService scoringService, DiaryService diaryService, ScoringProperties properties, Clock clock) {
         this.scoringService = scoringService;
+        this.diaryService = diaryService;
         this.properties = properties;
         this.clock = clock;
     }
@@ -68,6 +73,30 @@ public class ScoreController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
 
+        validateRange(from, to);
+        return scoringService.scoresBetween(jwt.getSubject(), from, to).stream()
+                .map(score -> DailyScoreResponse.from(score, properties.grade()))
+                .toList();
+    }
+
+    /** 홈 "나의 LifeDNA 정보" 주간 추이 카드용 — 수면·수분 항목별 원자값(FE backend-backlog #11/#27) */
+    @Operation(
+            summary = "수면·수분 항목별 구간 조회",
+            description = "홈 주간 추이 카드용 원자값(막대·진행바·등급) — 문장은 프론트가 만든다"
+                    + "(PLANNING_OPEN_ITEMS.md B-5 결정). 기록이 없는 날은 배열에서 채우지 않는다. 최대 366일.")
+    @GetMapping("/items")
+    public List<ItemTrendResponse> itemTrend(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+
+        validateRange(from, to);
+        return diaryService.between(jwt.getSubject(), from, to).stream()
+                .map(diary -> ItemTrendResponse.from(diary, properties.grade()))
+                .toList();
+    }
+
+    private static void validateRange(LocalDate from, LocalDate to) {
         if (from.isAfter(to)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from 이 to 보다 늦습니다");
         }
@@ -75,8 +104,5 @@ public class ScoreController {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "한 번에 조회할 수 있는 구간은 " + MAX_RANGE_DAYS + "일까지입니다");
         }
-        return scoringService.scoresBetween(jwt.getSubject(), from, to).stream()
-                .map(score -> DailyScoreResponse.from(score, properties.grade()))
-                .toList();
     }
 }
