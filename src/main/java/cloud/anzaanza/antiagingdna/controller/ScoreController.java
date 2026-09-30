@@ -51,7 +51,10 @@ public class ScoreController {
                 scoringService.scoreOn(jwt.getSubject(), LocalDate.now(clock)), properties.grade());
     }
 
-    @Operation(summary = "특정 날짜 종합점수", description = "미래 날짜는 400.")
+    @Operation(
+            summary = "특정 날짜 종합점수",
+            description = "미래 날짜는 400. 조회만으로는 점수 행이 생기지 않는다 — 저장은 일지가 있는 날과 오늘만,"
+                    + " 그 외 날짜는 계산해서 돌려주기만 하므로 구간 조회에 나타나지 않는다.")
     @GetMapping("/{date}")
     public DailyScoreResponse on(
             @AuthenticationPrincipal Jwt jwt,
@@ -79,11 +82,13 @@ public class ScoreController {
                 .toList();
     }
 
-    /** 홈 "나의 LifeDNA 정보" 주간 추이 카드용 — 수면·수분 항목별 원자값(FE backend-backlog #11/#27) */
+    /** 홈 "나의 LifeDNA 정보" 주간 추이·지표 카드용 — 수면·수분·스트레스 항목별 원자값(FE backend-backlog #11/#27/#10) */
     @Operation(
-            summary = "수면·수분 항목별 구간 조회",
-            description = "홈 주간 추이 카드용 원자값(막대·진행바·등급) — 문장은 프론트가 만든다"
-                    + "(PLANNING_OPEN_ITEMS.md B-5 결정). 기록이 없는 날은 배열에서 채우지 않는다. 최대 366일.")
+            summary = "수면·수분·스트레스 항목별 구간 조회",
+            description = "홈 주간 추이·지표 카드용 원자값(막대·진행바·등급) — 문장은 프론트가 만든다"
+                    + "(PLANNING_OPEN_ITEMS.md B-5 결정). stressScore 는 웰빙 방향(100×(10−stressLevel)/10,"
+                    + " 높을수록 좋음)이라 스트레스가 높으면 stressGrade=DANGER."
+                    + " 기록이 없는 날은 배열에서 채우지 않는다. 최대 366일.")
     @GetMapping("/items")
     public List<ItemTrendResponse> itemTrend(
             @AuthenticationPrincipal Jwt jwt,

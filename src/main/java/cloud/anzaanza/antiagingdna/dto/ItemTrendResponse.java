@@ -11,6 +11,9 @@ import java.time.LocalDate;
 
 /**
  * 홈 "나의 LifeDNA 정보" 주간 추이 카드(수면·수분) 원자값 — FE backend-backlog.md #11.
+ * 스트레스는 홈 지표 카드 등급 뱃지용(#10) — {@code stressScore} 는 채점 파이프라인과 같은
+ * 웰빙 방향({@link ItemScores#stress}, 높을수록 좋음)이라 스트레스가 높으면 {@code DANGER} 다.
+ * 등급 경계는 #22 결정대로 종합·영역·항목 공통.
  * 문장은 내려주지 않는다 — 서버는 원자값만 준다는 결정({@code PLANNING_OPEN_ITEMS.md} B-5)에
  * 따라, 막대·진행바를 그릴 숫자와 등급까지만 제공한다.
  *
@@ -24,12 +27,17 @@ public record ItemTrendResponse(
         Grade sleepGrade,
         WaterIntake waterIntake,
         Double waterScore,
-        Grade waterGrade) {
+        Grade waterGrade,
+        Integer stressLevel,
+        Double stressScore,
+        Grade stressGrade) {
 
     public static ItemTrendResponse from(Diary diary, ScoringProperties.GradeThresholds thresholds) {
         Double sleepScore = ItemScores.sleepDuration(diary.getSleepStartedAt(), diary.getSleepEndedAt());
         WaterIntake waterIntake = diary.getWaterIntake();
         Double waterScore = ItemScores.anchor(waterIntake);
+        Integer stressLevel = diary.getStressLevel();
+        Double stressScore = ItemScores.stress(stressLevel);
 
         return new ItemTrendResponse(
                 diary.getLogDate(),
@@ -38,7 +46,10 @@ public record ItemTrendResponse(
                 GradeCalculator.of(toBigDecimal(sleepScore), thresholds),
                 waterIntake,
                 waterScore,
-                GradeCalculator.of(toBigDecimal(waterScore), thresholds));
+                GradeCalculator.of(toBigDecimal(waterScore), thresholds),
+                stressLevel,
+                stressScore,
+                GradeCalculator.of(toBigDecimal(stressScore), thresholds));
     }
 
     private static BigDecimal toBigDecimal(Double value) {

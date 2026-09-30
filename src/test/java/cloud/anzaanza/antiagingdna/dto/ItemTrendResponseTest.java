@@ -11,7 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import org.junit.jupiter.api.Test;
 
-/** 홈 주간 추이 카드(수면·수분) 원자값 — FE backend-backlog.md #11. */
+/** 홈 지표 카드(수면·수분·스트레스) 원자값 — FE backend-backlog.md #11/#10. */
 class ItemTrendResponseTest {
 
     private static final ScoringProperties.GradeThresholds THRESHOLDS =
@@ -38,6 +38,17 @@ class ItemTrendResponseTest {
     }
 
     @Test
+    void 스트레스는_웰빙_방향_점수와_항목_공통_경계로_등급을_준다() {
+        assertThat(stressOf(3).stressScore()).isEqualTo(70.0);
+        assertThat(stressOf(3).stressGrade()).isEqualTo(Grade.GOOD);
+        assertThat(stressOf(4).stressGrade()).isEqualTo(Grade.WARN);
+        assertThat(stressOf(6).stressGrade()).isEqualTo(Grade.WARN);
+        assertThat(stressOf(7).stressGrade()).isEqualTo(Grade.DANGER);
+        assertThat(stressOf(10).stressScore()).isEqualTo(0.0);
+        assertThat(stressOf(7).stressLevel()).isEqualTo(7);
+    }
+
+    @Test
     void 미입력_항목은_점수와_등급도_결측이다() {
         Diary diary = Diary.builder().logDate(LocalDate.of(2026, 8, 10)).build();
 
@@ -49,5 +60,13 @@ class ItemTrendResponseTest {
         assertThat(response.waterIntake()).isNull();
         assertThat(response.waterScore()).isNull();
         assertThat(response.waterGrade()).isNull();
+        assertThat(response.stressLevel()).isNull();
+        assertThat(response.stressScore()).isNull();
+        assertThat(response.stressGrade()).isNull();
+    }
+
+    private static ItemTrendResponse stressOf(int level) {
+        Diary diary = Diary.builder().logDate(LocalDate.of(2026, 8, 10)).stressLevel(level).build();
+        return ItemTrendResponse.from(diary, THRESHOLDS);
     }
 }
