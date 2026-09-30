@@ -215,15 +215,16 @@ class ScoringApiTest {
                 .andExpect(status().isBadRequest());
     }
 
-    // ── 항목별 주간 추이 (수면·수분, FE backend-backlog #11/#27) ────
+    // ── 항목별 주간 추이 (수면·수분·스트레스, FE backend-backlog #11/#27/#10) ────
 
     @Test
-    void 항목_구간_조회는_수면과_수분을_점수와_등급으로_함께_준다() throws Exception {
+    void 항목_구간_조회는_수면_수분_스트레스를_점수와_등급으로_함께_준다() throws Exception {
         Diary diary = Diary.builder()
                 .logDate(TODAY)
                 .sleepStartedAt(LocalTime.of(23, 0))
                 .sleepEndedAt(LocalTime.of(7, 0)) // 8h → 100 → GOOD
                 .waterIntake(WaterIntake.THREE_TO_FIVE) // 60 → WARN
+                .stressLevel(8) // 20 → DANGER
                 .build();
         given(diaryService.between("user-1", TODAY.minusDays(2), TODAY)).willReturn(List.of(diary));
 
@@ -239,7 +240,10 @@ class ScoringApiTest {
                 .andExpect(jsonPath("$[0].sleepGrade").value("GOOD"))
                 .andExpect(jsonPath("$[0].waterIntake").value("THREE_TO_FIVE"))
                 .andExpect(jsonPath("$[0].waterScore").value(60.0))
-                .andExpect(jsonPath("$[0].waterGrade").value("WARN"));
+                .andExpect(jsonPath("$[0].waterGrade").value("WARN"))
+                .andExpect(jsonPath("$[0].stressLevel").value(8))
+                .andExpect(jsonPath("$[0].stressScore").value(20.0))
+                .andExpect(jsonPath("$[0].stressGrade").value("DANGER"));
     }
 
     @Test
